@@ -187,14 +187,24 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     setInputText('');
-    setShowPreview(false);
-    setToneAdjusted(false);
-    setShowCustomInput(false);
-    setIsCustomActive(false);
     setPreviewSourceText('');
+    setToneAdjusted(false);
+    setIsCustomActive(false);
+    setShowCustomInput(false);
+    setSliderValue(0);
+    setSliderBucket(0);
+    prevBucketRef.current = 0;
+    setShowPreview(false);
+    setPreview({ translation: '', reverseTranslation: '', explanation: null });
     setTranslationError(null);
+    // キャッシュクリア（前のパートナーのキャッシュが残らないように）
+    translationCacheRef.current = {};
+    setTranslationCacheState({});
+    setCustomTone('');
     setPartnerInputText('');
     setShowPartnerInput(false);
+    setToneDiffExplanation(null);
+    setToneDiffExpanded(false);
   }, [partner?.id]);
 
   // ── メッセージ ──
@@ -277,7 +287,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (!previewSourceText.trim() || !partner) return;
     const { tone, bucket } = sliderToToneBucket(sliderBucket);
     if (isCustomActive) return;
-    const key = getCacheKey(tone, bucket, previewSourceText, undefined, '日本語', partner.language);
+    const key = getCacheKey(tone, bucket, previewSourceText, undefined, '日本語', partner.language, isNative);
     const cached = translationCacheRef.current[key];
     if (!cached) return;
     if (cached.translation === preview.translation && cached.reverseTranslation === preview.reverseTranslation && cached.noChange === preview.noChange) return;
@@ -293,6 +303,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     bandKey: string;
     tone: string;
     bucket: number;
+    isNative: boolean;
     originalText: string;
     translation: string;
     reverseTranslation?: string;
@@ -301,17 +312,17 @@ export default function ChatScreen({ route, navigation }: Props) {
     sourceLang: string;
     targetLang: string;
   }) => {
-    const { bandKey, tone, bucket, originalText, translation, reverseTranslation, meaningDefinitions, sourceText, sourceLang, targetLang } = params;
+    const { bandKey, tone, bucket, isNative: isNativeParam, originalText, translation, reverseTranslation, meaningDefinitions, sourceText, sourceLang, targetLang } = params;
 
     const applyFix = (fixed: { translation: string; reverse_translation: string }) => {
-      const cacheKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang);
+      const cacheKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang, isNativeParam);
       updateTranslationCache({ [cacheKey]: { translation: fixed.translation, reverseTranslation: fixed.reverse_translation } });
       const currentToneBucket = sliderToToneBucket(sliderValue);
       if (currentToneBucket.tone === tone && currentToneBucket.bucket === bucket) {
         setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: fixed.reverse_translation }));
       }
       const otherBucket = bucket === 50 ? 100 : 50;
-      const otherKey = getCacheKey(tone, otherBucket, sourceText, undefined, sourceLang, targetLang);
+      const otherKey = getCacheKey(tone, otherBucket, sourceText, undefined, sourceLang, targetLang, isNativeParam);
       const cachedOther = translationCacheRef.current[otherKey];
       if (cachedOther && cachedOther.translation === fixed.translation) {
         const updates: Record<string, { translation: string; reverseTranslation: string; noChange: boolean }> = {};
@@ -357,33 +368,34 @@ export default function ChatScreen({ route, navigation }: Props) {
 
   const generateAndCacheUiBuckets = async (params: {
     tone: string;
+    isNative: boolean;
     sourceText: string;
     targetLang: string;
     sourceLang: string;
     customToneOverride?: string;
     skipPartial?: boolean;
   }) => {
-    const { tone, sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, customToneOverride, skipPartial } = params;
+    const { tone, isNative: isNativeParam, sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, customToneOverride, skipPartial } = params;
     const customToneValue = typeof customToneOverride === 'string' ? customToneOverride : tone === 'custom' ? customTone : undefined;
 
     const allCached = UI_TONE_LEVELS.every((bucket) => {
-      const key = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang);
+      const key = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang, isNativeParam);
       return Boolean(translationCacheRef.current[key]);
     });
     if (allCached) return;
 
     const cacheBucket = (bucket: number, result: TranslationResult, noChange?: boolean) => {
-      const cacheKey = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang);
+      const cacheKey = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang, isNativeParam);
       updateTranslationCache({ [cacheKey]: { translation: result.translation, reverseTranslation: result.reverse_translation, noChange } });
     };
 
     if (tone === 'custom') {
-      const result = await translateFull({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, isNative: false, customTone: customToneValue });
+      const result = await translateFull({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, isNative: isNativeParam, customTone: customToneValue });
       UI_TONE_LEVELS.forEach((b) => cacheBucket(b, result));
       return;
     }
 
-    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, effectiveSourceLang, effectiveTargetLang, isNativeParam);
     const cachedBase = translationCacheRef.current[baseCacheKey];
     let fullResult: TranslationResult;
 
@@ -441,20 +453,20 @@ export default function ChatScreen({ route, navigation }: Props) {
     cacheBucket(100, result100, noChange100);
 
     if (!noChange50) {
-      verifyAndFixOneBand({ bandKey: `${tone}_50`, tone, bucket: 50, originalText: sourceText, translation: partial50.translation, reverseTranslation: partial50.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
+      verifyAndFixOneBand({ bandKey: `${tone}_50`, tone, bucket: 50, isNative: isNativeParam, originalText: sourceText, translation: partial50.translation, reverseTranslation: partial50.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
     }
     if (!noChange100) {
-      verifyAndFixOneBand({ bandKey: `${tone}_100`, tone, bucket: 100, originalText: sourceText, translation: partial100.translation, reverseTranslation: partial100.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
+      verifyAndFixOneBand({ bandKey: `${tone}_100`, tone, bucket: 100, isNative: isNativeParam, originalText: sourceText, translation: partial100.translation, reverseTranslation: partial100.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
     }
   };
 
-  const generateAllToneAdjustments = async (params: { sourceText: string; targetLang: string; sourceLang: string }) => {
-    const { sourceText } = params;
+  const generateAllToneAdjustments = async (params: { isNative: boolean; sourceText: string; targetLang: string; sourceLang: string }) => {
+    const { isNative: isNativeParam, sourceText } = params;
     const effectiveTargetLang = params.targetLang;
     const effectiveSourceLang = params.sourceLang;
 
     const makeCacheKey = (tone: string, bucket: number) =>
-      getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+      getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang, isNativeParam);
 
     const cacheResult = (tone: string, bucket: number, result: TranslationResult, noChange?: boolean) => {
       updateTranslationCache({ [makeCacheKey(tone, bucket)]: { translation: result.translation, reverseTranslation: result.reverse_translation, noChange } });
@@ -572,14 +584,14 @@ export default function ChatScreen({ route, navigation }: Props) {
     cacheResult('business', 50, makeCachedResult(finalBusiness50, noChangeBus50, sourceText), noChangeBus50);
     cacheResult('business', 100, makeCachedResult(finalBusiness100, noChangeBus100, noChangeBus50 ? sourceText : finalBusiness50.reverse_translation), noChangeBus100);
 
-    const verifyParams = { sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang };
+    const verifyParams = { sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, isNative: isNativeParam };
     if (!noChangeCas50) verifyAndFixOneBand({ bandKey: 'casual_50', tone: 'casual', bucket: 50, originalText: sourceText, translation: finalCasual50.translation, reverseTranslation: finalCasual50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeCas100) verifyAndFixOneBand({ bandKey: 'casual_100', tone: 'casual', bucket: 100, originalText: sourceText, translation: casual100Full.translation, reverseTranslation: casual100Full.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus50) verifyAndFixOneBand({ bandKey: 'business_50', tone: 'business', bucket: 50, originalText: sourceText, translation: finalBusiness50.translation, reverseTranslation: finalBusiness50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus100) verifyAndFixOneBand({ bandKey: 'business_100', tone: 'business', bucket: 100, originalText: sourceText, translation: finalBusiness100.translation, reverseTranslation: finalBusiness100.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
   };
 
-  const preGenerateToneAdjustments = (params: { sourceText: string; targetLang: string; sourceLang: string }) => {
+  const preGenerateToneAdjustments = (params: { isNative: boolean; sourceText: string; targetLang: string; sourceLang: string }) => {
     generateAllToneAdjustments(params).catch(() => {});
   };
 
@@ -593,7 +605,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     const targetLang = partner.language;
     const isLocked = lockedSliderPosition !== null;
 
-    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, sourceLang, targetLang);
+    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, sourceLang, targetLang, isNative);
     const baseCached = translationCacheRef.current[baseCacheKey];
 
     if (baseCached && !isLocked) {
@@ -603,7 +615,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       setSliderValue(0);
       setSliderBucket(0);
       prevBucketRef.current = 0;
-      preGenerateToneAdjustments({ sourceText, targetLang, sourceLang });
+      preGenerateToneAdjustments({ isNative, sourceText, targetLang, sourceLang });
       return;
     }
 
@@ -621,25 +633,25 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     try {
       if (isLocked) {
-        await generateAllToneAdjustments({ sourceText, targetLang, sourceLang });
+        await generateAllToneAdjustments({ isNative, sourceText, targetLang, sourceLang });
         setToneAdjusted(true);
         const { tone, bucket } = sliderToToneBucket(lockedSliderPosition!);
         const lockedBucket = getSliderBucket(lockedSliderPosition!);
         setSliderValue(lockedSliderPosition!);
         setSliderBucket(lockedBucket);
         prevBucketRef.current = lockedBucket;
-        const lockKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang);
+        const lockKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang, isNative);
         const lockCached = translationCacheRef.current[lockKey];
         if (lockCached) {
           setPreview(prev => ({ ...prev, translation: lockCached.translation, reverseTranslation: lockCached.reverseTranslation, noChange: lockCached.noChange }));
         }
       } else {
-        await generateAndCacheUiBuckets({ tone: '_base', sourceText, targetLang, sourceLang, skipPartial: true });
+        await generateAndCacheUiBuckets({ tone: '_base', isNative, sourceText, targetLang, sourceLang, skipPartial: true });
         const newBaseCached = translationCacheRef.current[baseCacheKey];
         if (newBaseCached) {
           setPreview(prev => ({ ...prev, translation: newBaseCached.translation, reverseTranslation: newBaseCached.reverseTranslation, noChange: newBaseCached.noChange }));
         }
-        preGenerateToneAdjustments({ sourceText, targetLang, sourceLang });
+        preGenerateToneAdjustments({ isNative, sourceText, targetLang, sourceLang });
       }
       setShowPreview(true);
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -744,10 +756,10 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     // ★ 全4帯キャッシュ済みチェック（バックグラウンド生成完了時は即座にスライダー表示）
     const allCached = [
-      getCacheKey('casual', 50, sourceText, undefined, sourceLang, targetLang),
-      getCacheKey('casual', 100, sourceText, undefined, sourceLang, targetLang),
-      getCacheKey('business', 50, sourceText, undefined, sourceLang, targetLang),
-      getCacheKey('business', 100, sourceText, undefined, sourceLang, targetLang),
+      getCacheKey('casual', 50, sourceText, undefined, sourceLang, targetLang, isNative),
+      getCacheKey('casual', 100, sourceText, undefined, sourceLang, targetLang, isNative),
+      getCacheKey('business', 50, sourceText, undefined, sourceLang, targetLang, isNative),
+      getCacheKey('business', 100, sourceText, undefined, sourceLang, targetLang, isNative),
     ].every(key => Boolean(translationCacheRef.current[key]));
 
     if (allCached) {
@@ -761,7 +773,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     setIsTranslating(true);
     setTranslationError(null);
     try {
-      await generateAllToneAdjustments({ sourceText, targetLang, sourceLang });
+      await generateAllToneAdjustments({ isNative, sourceText, targetLang, sourceLang });
       setToneAdjusted(true);
       setSliderValue(0);
       setSliderBucket(0);
@@ -776,7 +788,7 @@ export default function ChatScreen({ route, navigation }: Props) {
   const updatePreviewFromSlider = (sliderPosition: number) => {
     if (!previewSourceText.trim() || !partner) return;
     const { tone, bucket } = sliderToToneBucket(sliderPosition);
-    const cacheKey = getCacheKey(tone, bucket, previewSourceText, undefined, '日本語', partner.language);
+    const cacheKey = getCacheKey(tone, bucket, previewSourceText, undefined, '日本語', partner.language, isNative);
     const cached = translationCacheRef.current[cacheKey];
     if (cached) {
       setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation, noChange: cached.noChange }));
@@ -830,8 +842,8 @@ export default function ChatScreen({ route, navigation }: Props) {
     };
 
     const prev = getPreviousTone(currentTone, currentInternalBucket);
-    const prevKey = getCacheKey(prev.tone, prev.bucket, previewSourceText, undefined, sourceLang, targetLang);
-    const currKey = getCacheKey(currentTone, currentInternalBucket, previewSourceText, undefined, sourceLang, targetLang);
+    const prevKey = getCacheKey(prev.tone, prev.bucket, previewSourceText, undefined, sourceLang, targetLang, isNative);
+    const currKey = getCacheKey(currentTone, currentInternalBucket, previewSourceText, undefined, sourceLang, targetLang, isNative);
     const prevCached = translationCacheRef.current[prevKey];
     const currCached = translationCacheRef.current[currKey];
     const sourceLangCode = getLangCodeFromName(sourceLang);
@@ -922,12 +934,13 @@ export default function ChatScreen({ route, navigation }: Props) {
     try {
       await generateAndCacheUiBuckets({
         tone: 'custom',
+        isNative,
         sourceText: previewSourceText,
         targetLang: partner.language,
         sourceLang: '日本語',
         customToneOverride: toneText,
       });
-      const cacheKey = getCacheKey('custom', 0, previewSourceText, toneText, '日本語', partner.language);
+      const cacheKey = getCacheKey('custom', 0, previewSourceText, toneText, '日本語', partner.language, isNative);
       const cached = translationCacheRef.current[cacheKey];
       if (cached) {
         setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation }));
