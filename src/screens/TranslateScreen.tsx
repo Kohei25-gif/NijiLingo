@@ -11,12 +11,13 @@ import {
   Platform,
   Modal,
   FlatList,
+  SafeAreaView,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Clipboard as ClipboardIcon, Check } from 'lucide-react-native';
+import { Clipboard as ClipboardIcon, Check, ArrowLeft, Settings } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { translateFull, translateFullSimple, translatePartialSpacy, extractStructureSpacy, generateExplanation, generateToneDifferenceExplanation, generateMeaningDefinitions, verifyTranslation, fixMeaningIssues, fixNaturalness, getLangCodeFromName } from '../services/groq';
 import { structureToPromptTextSpacy, extractContentWordsForFullGen, extractFlexibleWords, buildMeaningConstraintText } from '../services/prompts';
@@ -26,6 +27,8 @@ import { getVerifyingText, getFixingText, getNaturalnessCheckLabel, getDifferenc
 type RootStackParamList = {
   Home: undefined;
   Translate: { mode: 'receive' | 'send' };
+  List: undefined;
+  FaceToFace: { partnerId?: number };
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Translate'>;
@@ -287,6 +290,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
   const { mode } = route.params;
   const isPartnerMode = mode === 'receive';
   const isSelfMode = mode === 'send';
+
+  // ── トークメニュー ──
+  const [showTalkMenu, setShowTalkMenu] = useState(false);
 
   // ── メッセージボード ──
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1239,12 +1245,80 @@ export default function TranslateScreen({ route, navigation }: Props) {
   const hasTranslationResult = showPreview && Boolean(preview.translation.trim());
 
   return (
+    <SafeAreaView style={styles.container}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      {/* ── 言語選択バー削除: Web版と同じく入力エリア内に統合 ── */}
+      {/* ── アクション行（Web版と同じ: トーク、トークルーム、対面モード、設定） ── */}
+      <View style={styles.actionRow}>
+        <View>
+          <TouchableOpacity
+            onPress={() => setShowTalkMenu(!showTalkMenu)}
+            disabled={messages.length === 0}
+            style={messages.length === 0 ? styles.actionBtnDisabled : undefined}
+          >
+            <LinearGradient
+              colors={['#B5EAD7', '#C7CEEA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.actionBtn}
+            >
+              <Text style={styles.actionBtnText}>トーク</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          {showTalkMenu && (
+            <View style={styles.talkMenuDropdown}>
+              <TouchableOpacity
+                style={styles.talkMenuItem}
+                onPress={() => { setShowTalkMenu(false); }}
+              >
+                <Text style={styles.talkMenuItemText}>💾 トーク保存</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.talkMenuItem}
+                onPress={() => { setMessages([]); setShowTalkMenu(false); }}
+              >
+                <Text style={[styles.talkMenuItemText, styles.talkMenuDanger]}>🗑 トーク消去</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('List')}>
+          <LinearGradient
+            colors={['#B5EAD7', '#C7CEEA']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.actionBtn}
+          >
+            <Text style={styles.actionBtnText}>📋 トークルーム</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('FaceToFace', {})}>
+          <LinearGradient
+            colors={['#B5EAD7', '#C7CEEA']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.actionBtn}
+          >
+            <Text style={styles.actionBtnText}>🎤 対面モード</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => {}}
+        >
+          <Settings size={20} color="#333" strokeWidth={2.5} />
+        </TouchableOpacity>
+      </View>
+      {showTalkMenu && (
+        <TouchableOpacity
+          style={styles.talkMenuBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowTalkMenu(false)}
+        />
+      )}
 
       {/* ── メッセージボード ── */}
       <ScrollView
@@ -1344,7 +1418,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
           {/* セクションヘッダー: ←戻る + 言語セレクター（Web版と同じ構造） */}
           <View style={styles.sectionHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.collapseBtn}>
-              <Text style={styles.collapseBtnText}>←</Text>
+              <ArrowLeft size={18} color="#333" strokeWidth={2.5} />
             </TouchableOpacity>
             <View style={styles.langSelectorsCompact}>
               <TouchableOpacity
@@ -1379,26 +1453,26 @@ export default function TranslateScreen({ route, navigation }: Props) {
               textAlignVertical="top"
             />
             <View style={styles.btnStack}>
-              <TouchableOpacity onPress={handlePaste}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={handlePaste}>
                 <LinearGradient
                   colors={['#FFB7B2', '#FFDAC1']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.pasteBtn}
+                  style={[styles.pasteBtn, { flex: 1 }]}
                 >
                   <Text style={styles.pasteBtnText}>ペースト</Text>
                 </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity
+                style={[{ flex: 1 }, (loading || !inputText.trim()) ? styles.btnDisabled : undefined]}
                 onPress={handlePartnerTranslate}
                 disabled={loading || !inputText.trim()}
-                style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
               >
                 <LinearGradient
                   colors={['#B5EAD7', '#C7CEEA']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.translateBtn}
+                  style={[styles.translateBtn, { flex: 1 }]}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="#333" />
@@ -1427,7 +1501,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
           {/* selfモード: セクションヘッダー（← + 言語セレクター） */}
           <View style={styles.sectionHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.collapseBtn}>
-              <Text style={styles.collapseBtnText}>←</Text>
+              <ArrowLeft size={18} color="#333" strokeWidth={2.5} />
             </TouchableOpacity>
             <View style={styles.langSelectorsCompact}>
               <TouchableOpacity
@@ -1712,6 +1786,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
         </View>
       </Modal>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -1723,6 +1798,74 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9F7F2',
+  },
+
+  // ── アクション行（Web版translate-action-row） ──
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+    zIndex: 10,
+  },
+  actionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  settingsBtn: {
+    marginLeft: 'auto',
+    padding: 8,
+  },
+  talkMenuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9,
+  },
+  talkMenuDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    minWidth: 140,
+    zIndex: 100,
+  },
+  talkMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  talkMenuItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+    fontFamily: 'Quicksand_500Medium',
+  },
+  talkMenuDanger: {
+    color: '#e74c3c',
   },
 
   // ── メッセージボード ──
@@ -2206,11 +2349,6 @@ const styles = StyleSheet.create({
   collapseBtn: {
     padding: 4,
   },
-  collapseBtnText: {
-    fontSize: 18,
-    color: '#333',
-    fontFamily: 'Quicksand_600SemiBold',
-  },
   langSelectorsCompact: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2326,6 +2464,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   pasteBtnText: {
     fontSize: 13,
@@ -2338,6 +2477,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   translateBtnText: {
     fontSize: 13,

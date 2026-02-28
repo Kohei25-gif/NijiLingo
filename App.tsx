@@ -63,18 +63,7 @@ export default function App() {
             <Stack.Screen
               name="Translate"
               component={TranslateScreen}
-              options={({ route }) => ({
-                title: route.params.mode === 'receive' ? '📨 相手のメッセージを翻訳' : '✍️ 自分の文章を送る',
-                headerBackTitle: 'ホーム',
-                headerStyle: {
-                  backgroundColor: route.params.mode === 'receive'
-                    ? 'rgba(255,219,193,0.3)'
-                    : 'rgba(181,234,215,0.3)',
-                },
-                headerTintColor: '#333333',
-                headerTitleStyle: { fontWeight: '600', fontSize: 14, fontFamily: 'Quicksand_600SemiBold' },
-                headerShadowVisible: false,
-              })}
+              options={{ headerShown: false }}
             />
             <Stack.Screen
               name="List"
