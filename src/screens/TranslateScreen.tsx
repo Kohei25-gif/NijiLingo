@@ -14,9 +14,13 @@ import {
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { translateFull, generateExplanation, generateToneDifferenceExplanation } from '../services/groq';
+import { translateFull, translateFullSimple, translatePartialSpacy, extractStructureSpacy, generateExplanation, generateToneDifferenceExplanation, generateMeaningDefinitions, verifyTranslation, fixMeaningIssues, fixNaturalness, getLangCodeFromName } from '../services/groq';
+import { structureToPromptTextSpacy, extractContentWordsForFullGen, extractFlexibleWords, buildMeaningConstraintText } from '../services/prompts';
 import type { TranslationResult, ExplanationResult } from '../services/types';
+import { getVerifyingText, getFixingText, getNaturalnessCheckLabel, getDifferenceFromText, getNotYetGeneratedText, getFailedToGenerateText, getGrammarLabel } from '../services/i18n';
 
 type RootStackParamList = {
   Home: undefined;
@@ -41,6 +45,7 @@ interface Preview {
   translation: string;
   reverseTranslation: string;
   explanation: { point: string; explanation: string } | null;
+  noChange?: boolean;
 }
 
 // ═══ スライダーユーティリティ ═══
@@ -54,14 +59,11 @@ function sliderToToneBucket(position: number): { tone: string; bucket: number } 
 }
 
 function getSliderBucket(value: number): number {
-  const snapPoints = [-100, -50, 0, 50, 100];
-  let closest = snapPoints[0];
-  let minDist = Math.abs(value - snapPoints[0]);
-  for (const sp of snapPoints) {
-    const dist = Math.abs(value - sp);
-    if (dist < minDist) { minDist = dist; closest = sp; }
-  }
-  return closest;
+  if (value < -75) return -100;
+  if (value < -25) return -50;
+  if (value <= 25) return 0;
+  if (value <= 75) return 50;
+  return 100;
 }
 
 function getBadgeText(bucket: number): string {
@@ -95,8 +97,153 @@ function getSliderTrackColor(value: number): string {
   return `rgb(${Math.round(153 + (44 - 153) * ratio)},${Math.round(153 + (90 - 153) * ratio)},${Math.round(153 + (160 - 153) * ratio)})`;
 }
 
-function getCacheKey(tone: string, bucket: number): string {
-  return `${tone}_${bucket}`;
+// 2つの翻訳テキストから変化したキーワードを抽出
+function extractChangedParts(prev: string, curr: string): { prev: string; curr: string } | null {
+  const normalize = (w: string) => w.toLowerCase().replace(/[.,!?;:'"]/g, '');
+  const prevWords = prev.split(/\s+/);
+  const currWords = curr.split(/\s+/);
+  const minLen = Math.min(prevWords.length, currWords.length);
+  let start = 0;
+  while (start < minLen && normalize(prevWords[start]) === normalize(currWords[start])) {
+    start++;
+  }
+  if (start >= minLen && prevWords.length === currWords.length) return null;
+  let prevFirstEnd = start;
+  let currFirstEnd = start;
+  const remainPrev = prevWords.slice(start);
+  const remainCurr = currWords.slice(start);
+  for (let offset = 1; offset <= Math.max(remainPrev.length, remainCurr.length); offset++) {
+    if (start + offset < prevWords.length && start + offset < currWords.length &&
+        normalize(prevWords[start + offset]) === normalize(currWords[start + offset])) {
+      prevFirstEnd = start + offset - 1;
+      currFirstEnd = start + offset - 1;
+      break;
+    }
+    prevFirstEnd = Math.min(start + offset, prevWords.length - 1);
+    currFirstEnd = Math.min(start + offset, currWords.length - 1);
+  }
+  const ctxStart = Math.max(0, start - 1);
+  const prevCtxEnd = Math.min(prevWords.length - 1, prevFirstEnd + 1);
+  const currCtxEnd = Math.min(currWords.length - 1, currFirstEnd + 1);
+  return {
+    prev: prevWords.slice(ctxStart, prevCtxEnd + 1).join(' '),
+    curr: currWords.slice(ctxStart, currCtxEnd + 1).join(' '),
+  };
+}
+
+// 言語検出用データ
+const LANGUAGE_PROFILES: Record<string, string[]> = {
+  '日本語': ['は', 'す', 'い', 'す_', 'です', 'ます', '日本', '本語', '日本語', 'こん', 'にち', 'ちは', 'あり', 'がと', 'とう'],
+  '英語': ['the', 'is', 'are', 'you', 'to', 'and', 'in', 'it', 'of', 'that', 'have', 'for', 'not', 'with', 'this'],
+  'フランス語': ['le', 'la', 'les', 'de', 'est', 'et', 'en', 'un', 'une', 'je', 'vous', 'que', 'ne', 'pas', 'pour'],
+  'スペイン語': ['el', 'la', 'de', 'que', 'es', 'en', 'un', 'una', 'los', 'las', 'no', 'por', 'con', 'para', 'se'],
+  'ドイツ語': ['der', 'die', 'und', 'in', 'ist', 'das', 'den', 'ich', 'sie', 'es', 'nicht', 'mit', 'ein', 'eine', 'auf'],
+  'イタリア語': ['il', 'la', 'di', 'che', 'e', 'un', 'una', 'in', 'per', 'non', 'sono', 'con', 'lo', 'gli', 'le'],
+  'ポルトガル語': ['de', 'a', 'o', 'que', 'e', 'do', 'da', 'em', 'um', 'para', 'com', 'não', 'uma', 'os', 'se'],
+  '韓国語': ['요', '니다', '안녕', '하세요', '감사', '합니다', '는', '이', '가', '을', '를', '에', '에서', '와', '과'],
+  '中国語': ['的', '是', '了', '在', '有', '我', '他', '她', '你', '们', '这', '那', '好', '中', '文'],
+  'チェコ語': ['je', 'se', 'na', 'v', 'a', 'že', 'do', 'pro', 'to', 'ne', 'si', 'tak', 'jak', 'ale', 'co'],
+};
+const LATIN_FEATURES: Record<string, { unique: string; chars: string; bigrams: string[] }> = {
+  'フランス語': { unique: 'çœ', chars: 'çéèêëàâîïôùûüœ', bigrams: ['ai', 'au', 'ou', 'eu', 'oi', 'on', 'an', 'en'] },
+  'スペイン語': { unique: 'ñ¿¡', chars: 'áéíóúüñ', bigrams: ['ue', 'ie', 'io', 'ia', 'ei'] },
+  'ドイツ語': { unique: 'ß', chars: 'äöüß', bigrams: ['ch', 'sch', 'ei', 'ie', 'au', 'eu'] },
+  'イタリア語': { unique: 'ìò', chars: 'àèéìòù', bigrams: ['ch', 'gh', 'sc', 'gn', 'gl'] },
+  'ポルトガル語': { unique: 'ãõ', chars: 'áàâãçéêíóôõú', bigrams: ['ão', 'õe', 'ai', 'ei', 'ou'] },
+  'チェコ語': { unique: 'řů', chars: 'áčďéěíňóřšťúůýž', bigrams: ['ch', 'st', 'ní', 'tí'] },
+  '英語': { unique: '', chars: '', bigrams: [] },
+};
+const COMMON_WORDS: Record<string, string[]> = {
+  '英語': ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'have', 'has', 'this', 'that', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'my', 'your', 'do', 'does', 'not', 'can', 'will', 'would', 'could', 'should', 'what', 'how', 'why', 'when', 'where', 'who', 'come', 'here', 'there', 'go', 'get', 'make', 'know', 'think', 'take', 'see', 'want', 'just', 'now', 'only', 'very', 'also', 'back', 'after', 'use', 'our', 'out', 'up', 'other', 'into', 'more', 'some', 'time', 'so', 'if', 'no', 'than', 'them', 'then', 'way', 'look', 'first', 'new', 'because', 'day', 'people', 'over', 'such', 'through', 'long', 'little', 'own', 'good', 'man', 'too', 'any', 'same', 'tell', 'work', 'last', 'most', 'need', 'feel', 'high', 'much', 'off', 'old', 'right', 'still', 'mean', 'keep', 'let', 'put', 'did', 'had', 'got'],
+  'フランス語': ['le', 'la', 'les', 'un', 'une', 'est', 'sont', 'ai', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'de', 'et', 'en', 'ce', 'cette', 'mon', 'ton', 'son', 'ne', 'pas', 'que', 'qui', 'mais', 'ou', 'donc', 'car', 'comprends', 'comprend', 'suis', 'es', 'fait', 'faire', 'avoir', 'pour', 'avec', 'sur', 'dans', 'par', 'merci', 'beaucoup', 'bonjour', 'bonsoir', 'comment', 'allez', 'bien', 'très', 'oui', 'non'],
+  'スペイン語': ['el', 'la', 'los', 'las', 'un', 'una', 'es', 'son', 'yo', 'tu', 'él', 'ella', 'mi', 'su', 'de', 'y', 'en', 'que', 'no', 'tengo', 'tiene', 'pero', 'como', 'para', 'por', 'con', 'entiendo', 'entiende', 'hablo', 'habla', 'puedo', 'puede', 'quiero', 'quiere', 'gracias', 'hola', 'buenos', 'buenas', 'muy', 'bien'],
+  'ドイツ語': ['der', 'die', 'das', 'ein', 'eine', 'ist', 'sind', 'war', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'mein', 'dein', 'sein', 'und', 'mit', 'für', 'auf', 'nicht', 'aber', 'oder', 'wenn', 'wie', 'geht', 'ihnen', 'haben', 'werden', 'kann', 'guten', 'tag', 'morgen', 'danke', 'bitte', 'gut', 'sehr'],
+  'イタリア語': ['il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'una', 'e', 'sono', 'ho', 'hai', 'ha', 'io', 'tu', 'lui', 'lei', 'noi', 'di', 'che', 'non', 'ma', 'come', 'per', 'con', 'capisco', 'capisce', 'parlo', 'parla', 'posso', 'voglio', 'bene', 'molto', 'questo', 'quello', 'stai', 'sta', 'sto', 'grazie', 'ciao', 'buongiorno', 'buonasera'],
+  'ポルトガル語': ['o', 'a', 'os', 'as', 'um', 'uma', 'são', 'tenho', 'tem', 'eu', 'tu', 'ele', 'ela', 'nós', 'de', 'em', 'que', 'não', 'com', 'para', 'por', 'mas', 'entendo', 'entende', 'falo', 'fala', 'posso', 'pode', 'quero', 'quer', 'muito', 'bem', 'obrigado', 'obrigada', 'bom', 'dia', 'tudo'],
+  'チェコ語': ['ten', 'ta', 'to', 'je', 'jsou', 'byl', 'já', 'ty', 'on', 'ona', 'my', 'vy', 'z', 'na', 'v', 'a', 'že', 'do', 'pro', 'ale', 'jak', 'máte', 'mám', 'rozumím', 'mluvím', 'dobrý', 'den', 'děkuji'],
+};
+
+function detectLanguage(text: string): string {
+  if (!text.trim()) return '';
+  const textLower = text.toLowerCase();
+  // Stage 1: 固有スクリプト検出（CJK言語）
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return '日本語';
+  if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(text)) return '韓国語';
+  if (/[\u4E00-\u9FFF]/.test(text)) return '中国語';
+  // Stage 2: 拡張特徴文字検出（ラテン系言語）
+  const latinScores: Record<string, number> = {};
+  for (const [lang, features] of Object.entries(LATIN_FEATURES)) {
+    latinScores[lang] = 0;
+    for (const char of features.unique) { if (textLower.includes(char)) latinScores[lang] += 5; }
+    for (const char of features.chars) { if (textLower.includes(char)) latinScores[lang] += 1; }
+    for (const bigram of features.bigrams) { if (textLower.includes(bigram)) latinScores[lang] += 0.5; }
+  }
+  const maxLatinScore = Math.max(0, ...Object.values(latinScores));
+  if (maxLatinScore >= 5) return Object.entries(latinScores).sort((a, b) => b[1] - a[1])[0][0];
+  // Stage 3: 単語リスト検出
+  const wordScores: Record<string, number> = {};
+  const words = textLower.match(/\b\w+\b/g) || [];
+  for (const [lang, commonWords] of Object.entries(COMMON_WORDS)) {
+    wordScores[lang] = 0;
+    for (const word of words) { if (commonWords.includes(word)) wordScores[lang] += 1; }
+  }
+  for (const lang of Object.keys(wordScores)) { if (latinScores[lang]) wordScores[lang] += latinScores[lang]; }
+  const maxWordScore = Math.max(0, ...Object.values(wordScores));
+  if (maxWordScore >= 2) {
+    const sortedScores = Object.entries(wordScores).sort((a, b) => b[1] - a[1]);
+    const [bestLang, bestScore] = sortedScores[0];
+    const englishScore = wordScores['英語'] || 0;
+    if (bestLang !== '英語' && bestScore > englishScore) return bestLang;
+    else if (bestLang === '英語') return '英語';
+    if (bestScore >= 2) return bestLang;
+  }
+  // Stage 4: n-gram統計的検出
+  const extractNgrams = (t: string): string[] => {
+    const ngrams: Record<string, number> = {};
+    const normalized = t.toLowerCase().trim().replace(/\s+/g, ' ');
+    for (const n of [1, 2, 3]) {
+      const padded = '_'.repeat(n - 1) + normalized + '_'.repeat(n - 1);
+      for (let i = 0; i <= padded.length - n; i++) { const ngram = padded.slice(i, i + n); ngrams[ngram] = (ngrams[ngram] || 0) + 1; }
+    }
+    return Object.entries(ngrams).sort((a, b) => b[1] - a[1]).map(([ng]) => ng);
+  };
+  const textNgrams = extractNgrams(text);
+  const ngramScores: Record<string, number> = {};
+  const isLatinOnly = text.split('').every(c => (c.codePointAt(0) || 0) < 0x3000);
+  const candidateLangs = isLatinOnly
+    ? ['英語', 'フランス語', 'スペイン語', 'ドイツ語', 'イタリア語', 'ポルトガル語', 'チェコ語']
+    : Object.keys(LANGUAGE_PROFILES);
+  for (const lang of candidateLangs) {
+    const profile = LANGUAGE_PROFILES[lang];
+    if (!profile) continue;
+    let score = 0;
+    const profileSet = new Set(profile);
+    for (let i = 0; i < Math.min(textNgrams.length, 30); i++) {
+      if (profileSet.has(textNgrams[i])) score += Math.max(0, profile.length - profile.indexOf(textNgrams[i]));
+    }
+    if (latinScores[lang]) score *= (1 + latinScores[lang] * 0.1);
+    ngramScores[lang] = score;
+  }
+  const totalScore = Object.values(ngramScores).reduce((a, b) => a + b, 0);
+  if (totalScore > 0) return Object.entries(ngramScores).sort((a, b) => b[1] - a[1])[0][0];
+  return '英語';
+}
+
+const PROMPT_VERSION = '2026-02-11-phase2d-fix3';
+const UI_TONE_LEVELS = [0, 50, 100];
+
+function getCacheKey(
+  tone: string | null,
+  toneBucket: number,
+  sourceText: string,
+  customToneText?: string,
+  sourceLang?: string,
+  targetLang?: string,
+): string {
+  const normalizedTone = tone || 'none';
+  const customPart = tone === 'custom' && customToneText ? `_${customToneText}` : '';
+  const langPart = `${sourceLang || 'auto'}->${targetLang || 'unknown'}`;
+  return `${PROMPT_VERSION}|${langPart}|${sourceText}|${normalizedTone}_${toneBucket}${customPart}`;
 }
 
 // ═══ 言語リスト ═══
@@ -111,7 +258,7 @@ const LANGUAGES = [
   { code: 'zh', name: '中国語', flag: '🇨🇳' },
   { code: 'de', name: 'ドイツ語', flag: '🇩🇪' },
   { code: 'it', name: 'イタリア語', flag: '🇮🇹' },
-  { code: 'pt', name: 'ポルトガル語', flag: '🇵🇹' },
+  { code: 'pt', name: 'ポルトガル語', flag: '🇧🇷' },
   { code: 'cs', name: 'チェコ語', flag: '🇨🇿' },
 ];
 
@@ -151,6 +298,7 @@ export default function TranslateScreen({ route }: Props) {
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [langModalTarget, setLangModalTarget] = useState<'source' | 'target'>('source');
   const [detectedLang, setDetectedLang] = useState('');
+  const selfTargetLangManuallySet = useRef(false);
 
   // ── 入力 ──
   const [inputText, setInputText] = useState('');
@@ -179,17 +327,61 @@ export default function TranslateScreen({ route }: Props) {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [isCustomActive, setIsCustomActive] = useState(false);
 
-  // ── ロック ──
+  // ── ロック（AsyncStorageで永続化） ──
   const [lockedSliderPosition, setLockedSliderPosition] = useState<number | null>(null);
+
+  // 起動時にAsyncStorageからロック位置を復元
+  useEffect(() => {
+    AsyncStorage.getItem('nijilingo_locked_slider_position').then(val => {
+      if (val !== null) setLockedSliderPosition(JSON.parse(val));
+    }).catch(() => {});
+  }, []);
 
   // ── コピーフィードバック ──
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [showCopiedToast, setShowCopiedToast] = useState(false);
 
+  // ── プレビュー固定ソーステキスト ──
+  const [previewSourceText, setPreviewSourceText] = useState('');
+
+  // ── 検証API状態 ──
+  const [verificationStatus, setVerificationStatus] = useState<Record<string, 'verifying' | 'fixing' | 'passed' | null>>({});
+
+  // ── キャッシュ（state + ref） ──
+  const [translationCache, setTranslationCacheState] = useState<Record<string, {
+    translation: string;
+    reverseTranslation: string;
+    noChange?: boolean;
+  }>>({});
+  const translationCacheRef = useRef<Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>>({});
+
   // ── Refs ──
-  const activeSourceText = useRef('');
-  const translationCache = useRef<Record<string, TranslationResult>>({});
   const prevBucketRef = useRef(0);
+
+  // ── キャッシュ到着時の自動プレビュー更新 ──
+  useEffect(() => {
+    if (!previewSourceText.trim()) return;
+    const { tone, bucket } = sliderToToneBucket(sliderBucket);
+    if (isCustomActive) return;
+    const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
+    const key = getCacheKey(tone, bucket, previewSourceText, undefined, effectiveSourceLang, targetLang);
+    const cached = translationCacheRef.current[key];
+    if (!cached) return;
+    if (cached.translation === preview.translation && cached.reverseTranslation === preview.reverseTranslation && cached.noChange === preview.noChange) return;
+    setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation, noChange: cached.noChange }));
+  }, [sliderBucket, isCustomActive, previewSourceText, translationCache]);
+
+  // ── トーン差分解説リセット ──
+  useEffect(() => {
+    setToneDiffExplanation(null);
+    setToneDiffExpanded(false);
+  }, [sliderBucket, isCustomActive, previewSourceText]);
+
+  // ── キャッシュ更新ヘルパー（ref + state両方） ──
+  const updateTranslationCache = (updates: Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>) => {
+    Object.assign(translationCacheRef.current, updates);
+    setTranslationCacheState(prev => ({ ...prev, ...updates }));
+  };
 
   // ── コピー関数 ──
   const copyToClipboard = async (text: string) => {
@@ -201,7 +393,296 @@ export default function TranslateScreen({ route }: Props) {
   // ── ペースト関数 ──
   const handlePaste = async () => {
     const text = await Clipboard.getStringAsync();
-    if (text) setInputText(prev => prev + text);
+    if (text) setInputText(text);
+  };
+
+  // ══════════════════════════════════════════════
+  // 検証・修正（fire-and-forget）
+  // ══════════════════════════════════════════════
+
+  const verifyAndFixOneBand = (params: {
+    bandKey: string;
+    tone: string;
+    bucket: number;
+    originalText: string;
+    translation: string;
+    reverseTranslation?: string;
+    meaningDefinitions: Record<string, string>;
+    sourceText: string;
+    sourceLang: string;
+    targetLang: string;
+  }) => {
+    const { bandKey, tone, bucket, originalText, translation, reverseTranslation, meaningDefinitions, sourceText, sourceLang, targetLang } = params;
+
+    const applyFix = (fixed: { translation: string; reverse_translation: string }) => {
+      const cacheKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang);
+      updateTranslationCache({
+        [cacheKey]: { translation: fixed.translation, reverseTranslation: fixed.reverse_translation }
+      });
+      const currentToneBucket = sliderToToneBucket(sliderValue);
+      if (currentToneBucket.tone === tone && currentToneBucket.bucket === bucket) {
+        setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: fixed.reverse_translation }));
+      }
+      // noChange整合性維持
+      const otherBucket = bucket === 50 ? 100 : 50;
+      const otherKey = getCacheKey(tone, otherBucket, sourceText, undefined, sourceLang, targetLang);
+      const cachedOther = translationCacheRef.current[otherKey];
+      if (cachedOther && cachedOther.translation === fixed.translation) {
+        const updates: Record<string, { translation: string; reverseTranslation: string; noChange: boolean }> = {};
+        updates[otherKey] = { translation: cachedOther.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
+        updates[cacheKey] = { translation: fixed.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
+        updateTranslationCache(updates);
+      } else if (bucket === 50 && cachedOther) {
+        // 50%が変わったので100%のnoChangeを再判定
+        const newNoChange = cachedOther.translation === fixed.translation;
+        if (cachedOther.noChange !== newNoChange) {
+          updateTranslationCache({
+            [otherKey]: { ...cachedOther, noChange: newNoChange }
+          });
+        }
+      }
+    };
+
+    void (async () => {
+      try {
+        setVerificationStatus(prev => ({ ...prev, [bandKey]: 'verifying' }));
+        const result = await verifyTranslation({ originalText, translation, reverseTranslation, meaningDefinitions, tone: `${tone} ${bucket}%` });
+        const actionableIssues = (result.issues || []).filter((i: { severity: string }) => i.severity === 'high' || i.severity === 'medium');
+        if (actionableIssues.length === 0) {
+          setVerificationStatus(prev => ({ ...prev, [bandKey]: 'passed' }));
+          return;
+        }
+        const meaningIssues = actionableIssues.filter((i: { type: string }) => i.type !== 'unnatural' && i.type !== 'reverse_subject' && i.type !== 'reverse_unnatural');
+        const naturalIssues = actionableIssues.filter((i: { type: string }) => i.type === 'unnatural' || i.type === 'reverse_subject' || i.type === 'reverse_unnatural');
+        setVerificationStatus(prev => ({ ...prev, [bandKey]: 'fixing' }));
+        let currentTranslation = translation;
+        if (meaningIssues.length > 0) {
+          const fixed = await fixMeaningIssues({ originalText, translation: currentTranslation, issues: meaningIssues, sourceLang, targetLang, tone, bucket });
+          currentTranslation = fixed.translation;
+          applyFix(fixed);
+        }
+        if (naturalIssues.length > 0) {
+          const fixed = await fixNaturalness({ originalText, translation: currentTranslation, issues: naturalIssues, sourceLang, targetLang, tone, bucket });
+          applyFix(fixed);
+        }
+        setVerificationStatus(prev => ({ ...prev, [bandKey]: 'passed' }));
+      } catch {
+        setVerificationStatus(prev => ({ ...prev, [bandKey]: null }));
+      }
+    })();
+  };
+
+  // ══════════════════════════════════════════════
+  // generateAndCacheUiBuckets（ベース翻訳 + Partial生成）
+  // ══════════════════════════════════════════════
+
+  const generateAndCacheUiBuckets = async (params: {
+    tone: string;
+    sourceText: string;
+    targetLang: string;
+    sourceLang: string;
+    customToneOverride?: string;
+    skipPartial?: boolean;
+  }) => {
+    const { tone, sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, customToneOverride, skipPartial } = params;
+
+    const customToneValue = typeof customToneOverride === 'string' ? customToneOverride : tone === 'custom' ? customTone : undefined;
+
+    // キャッシュチェック: 全レベルがあればスキップ
+    const allCached = UI_TONE_LEVELS.every((bucket) => {
+      const key = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang);
+      return Boolean(translationCacheRef.current[key]);
+    });
+    if (allCached) return;
+
+    const cacheBucket = (bucket: number, result: TranslationResult, noChange?: boolean) => {
+      const cacheKey = getCacheKey(tone, bucket, sourceText, customToneValue, effectiveSourceLang, effectiveTargetLang);
+      updateTranslationCache({ [cacheKey]: { translation: result.translation, reverseTranslation: result.reverse_translation, noChange } });
+    };
+
+    // custom は FULL一発を共有
+    if (tone === 'custom') {
+      const result = await translateFull({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, isNative: false, customTone: customToneValue });
+      UI_TONE_LEVELS.forEach((b) => cacheBucket(b, result));
+      return;
+    }
+
+    // ベース翻訳キャッシュ共有
+    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+    const cachedBase = translationCacheRef.current[baseCacheKey];
+    let fullResult: TranslationResult;
+
+    if (cachedBase) {
+      fullResult = { translation: cachedBase.translation, reverse_translation: cachedBase.reverseTranslation } as TranslationResult;
+    } else {
+      const sourceLangCode = getLangCodeFromName(effectiveSourceLang);
+      const sourceSpacyResult = await extractStructureSpacy(sourceText, sourceLangCode);
+      const contentWordsForFull = extractContentWordsForFullGen(sourceSpacyResult);
+      fullResult = await translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, contentWords: contentWordsForFull || undefined });
+      updateTranslationCache({ [baseCacheKey]: { translation: fullResult.translation, reverseTranslation: sourceText } });
+    }
+
+    const base0Result = { ...fullResult, reverse_translation: sourceText } as TranslationResult;
+    cacheBucket(0, base0Result);
+
+    if (skipPartial) return;
+
+    // spaCy構造抽出
+    const targetLangCode = getLangCodeFromName(effectiveTargetLang);
+    const spacyResult = await extractStructureSpacy(fullResult.translation, targetLangCode);
+    const baseStructureText = structureToPromptTextSpacy(spacyResult);
+
+    // meaning定義生成
+    const flexWords = extractFlexibleWords(spacyResult);
+    const definitions = await generateMeaningDefinitions(sourceText, fullResult.translation, flexWords, effectiveSourceLang);
+    const meaningConstraint = buildMeaningConstraintText(definitions);
+
+    // Partial 50%
+    const partial50 = await translatePartialSpacy({
+      baseTranslation: fullResult.translation, structureText: baseStructureText,
+      tone, toneLevel: 50, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang,
+      originalText: sourceText, meaningConstraint,
+    });
+
+    // Partial 100%（50%テキスト参照）
+    const partial100 = await translatePartialSpacy({
+      baseTranslation: fullResult.translation, structureText: baseStructureText,
+      tone, toneLevel: 100, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang,
+      originalText: sourceText, referenceTranslation: partial50.translation, meaningConstraint,
+    });
+
+    // noChange判定つきでキャッシュ
+    const noChange50 = partial50.translation === fullResult.translation;
+    const noChange100 = partial100.translation === (noChange50 ? fullResult.translation : partial50.translation);
+    const result50 = noChange50 ? { ...partial50, reverse_translation: sourceText } as TranslationResult : partial50 as TranslationResult;
+    const result100 = noChange100 ? { ...partial100, reverse_translation: noChange50 ? sourceText : partial50.reverse_translation } as TranslationResult : partial100 as TranslationResult;
+    cacheBucket(50, result50, noChange50);
+    cacheBucket(100, result100, noChange100);
+
+    // 検証（fire-and-forget）
+    if (!noChange50) {
+      verifyAndFixOneBand({ bandKey: `${tone}_50`, tone, bucket: 50, originalText: sourceText, translation: partial50.translation, reverseTranslation: partial50.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
+    }
+    if (!noChange100) {
+      verifyAndFixOneBand({ bandKey: `${tone}_100`, tone, bucket: 100, originalText: sourceText, translation: partial100.translation, reverseTranslation: partial100.reverse_translation, meaningDefinitions: definitions, sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang });
+    }
+  };
+
+  // ══════════════════════════════════════════════
+  // generateAllToneAdjustments（全4帯並列生成）
+  // ══════════════════════════════════════════════
+
+  const generateAllToneAdjustments = async (params: {
+    sourceText: string;
+    targetLang: string;
+    sourceLang: string;
+  }) => {
+    const { sourceText } = params;
+    const effectiveTargetLang = params.targetLang;
+    const effectiveSourceLang = params.sourceLang;
+
+    const makeCacheKey = (tone: string, bucket: number) =>
+      getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+
+    const cacheResult = (tone: string, bucket: number, result: TranslationResult, noChange?: boolean) => {
+      updateTranslationCache({ [makeCacheKey(tone, bucket)]: { translation: result.translation, reverseTranslation: result.reverse_translation, noChange } });
+    };
+
+    // 全4帯キャッシュ済みならスキップ
+    const requiredKeys = [makeCacheKey('casual', 50), makeCacheKey('casual', 100), makeCacheKey('business', 50), makeCacheKey('business', 100)];
+    if (requiredKeys.every(key => Boolean(translationCacheRef.current[key]))) return;
+
+    // ベース翻訳
+    const baseCacheKey = makeCacheKey('_base', 0);
+    const cachedBase = translationCacheRef.current[baseCacheKey];
+    let fullResult: TranslationResult;
+
+    if (cachedBase) {
+      fullResult = { translation: cachedBase.translation, reverse_translation: cachedBase.reverseTranslation } as TranslationResult;
+    } else {
+      const sourceLangCode = getLangCodeFromName(effectiveSourceLang);
+      const sourceSpacyResult = await extractStructureSpacy(sourceText, sourceLangCode);
+      const contentWordsForFull = extractContentWordsForFullGen(sourceSpacyResult);
+      fullResult = await translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, contentWords: contentWordsForFull || undefined });
+      updateTranslationCache({ [baseCacheKey]: { translation: fullResult.translation, reverseTranslation: sourceText } });
+    }
+
+    cacheResult('casual', 0, { ...fullResult, reverse_translation: sourceText } as TranslationResult);
+    cacheResult('business', 0, { ...fullResult, reverse_translation: sourceText } as TranslationResult);
+
+    // spaCy構造抽出
+    const targetLangCode = getLangCodeFromName(effectiveTargetLang);
+    const spacyResult = await extractStructureSpacy(fullResult.translation, targetLangCode);
+    const baseStructureText = structureToPromptTextSpacy(spacyResult);
+
+    // meaning定義生成
+    const flexWords = extractFlexibleWords(spacyResult);
+    const definitions = await generateMeaningDefinitions(sourceText, fullResult.translation, flexWords, effectiveSourceLang);
+    const meaningConstraint = buildMeaningConstraintText(definitions);
+
+    // Step 3: 並列生成 (casual 50% + business 50%)
+    const [casual50, business50] = await Promise.all([
+      translatePartialSpacy({ baseTranslation: fullResult.translation, structureText: baseStructureText, tone: 'casual', toneLevel: 50, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, originalText: sourceText, meaningConstraint }),
+      translatePartialSpacy({ baseTranslation: fullResult.translation, structureText: baseStructureText, tone: 'business', toneLevel: 50, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, originalText: sourceText, meaningConstraint }),
+    ]);
+
+    // Step 3.5: noChangeリトライ
+    let finalCasual50 = casual50;
+    let finalBusiness50 = business50;
+    const retryPromises: Promise<void>[] = [];
+
+    if (casual50.translation === fullResult.translation) {
+      retryPromises.push(
+        translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, meaningConstraint, toneInstruction: `Rewrite as if writing a casual email to a friend.\nHere is the base translation for reference — make yours more casual than this:\n"${fullResult.translation}"\nKeep the same meaning, but you are free to use completely different words and phrasing.`, tone: 'casual' }).then(result => { finalCasual50 = result; })
+      );
+    }
+    if (business50.translation === fullResult.translation) {
+      retryPromises.push(
+        translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, meaningConstraint, toneInstruction: `Write in a polite and respectful tone. Use courteous expressions appropriate for the target language. Do not replace everyday vocabulary with literary or archaic words.\nHere is the base translation for reference — make yours more formal than this:\n"${fullResult.translation}"`, tone: 'business' }).then(result => { finalBusiness50 = result; })
+      );
+    }
+    if (retryPromises.length > 0) await Promise.all(retryPromises);
+
+    // Step 4: 100%並列生成
+    const [casual100Full, business100] = await Promise.all([
+      translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, meaningConstraint, toneInstruction: `Translate as if texting a close friend. Be more casual than the 50% version below — use slang, abbreviations, and a relaxed tone.\nHere is the 50% casual version — make yours noticeably more casual:\n"${finalCasual50.translation}"\nKeep the same meaning, but you are free to use completely different words and phrasing.`, tone: 'casual' }),
+      translatePartialSpacy({ baseTranslation: fullResult.translation, structureText: baseStructureText, tone: 'business', toneLevel: 100, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, originalText: sourceText, referenceTranslation: finalBusiness50.translation, fallbackToPreviousLevel: finalBusiness50, meaningConstraint }),
+    ]);
+
+    // Step 4.5: business 100% noChangeリトライ
+    let finalBusiness100 = business100;
+    const bus100Ref = finalBusiness50.translation === fullResult.translation ? fullResult.translation : finalBusiness50.translation;
+    if (business100.translation === bus100Ref) {
+      finalBusiness100 = await translateFullSimple({ sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang, meaningConstraint, toneInstruction: `Write in a highly polite and formal tone. Use courteous expressions, honorifics, and refined sentence structure appropriate for the target language. Do not replace everyday vocabulary with literary or archaic words.\nHere is the 50% business version for reference — make yours more formal than this:\n"${finalBusiness50.translation}"`, tone: 'business' });
+    }
+
+    // Step 5: 全結果をキャッシュ
+    const noChangeCas50 = finalCasual50.translation === fullResult.translation;
+    const noChangeCas100 = casual100Full.translation === (noChangeCas50 ? fullResult.translation : finalCasual50.translation);
+    const noChangeBus50 = finalBusiness50.translation === fullResult.translation;
+    const noChangeBus100 = finalBusiness100.translation === (noChangeBus50 ? fullResult.translation : finalBusiness50.translation);
+
+    const makeCachedResult = (result: { translation: string; reverse_translation: string }, noChange: boolean, prevReverseTranslation: string) =>
+      noChange ? { ...result, reverse_translation: prevReverseTranslation } as TranslationResult : result as TranslationResult;
+
+    cacheResult('casual', 50, makeCachedResult(finalCasual50, noChangeCas50, sourceText), noChangeCas50);
+    cacheResult('casual', 100, makeCachedResult(casual100Full, noChangeCas100, noChangeCas50 ? sourceText : finalCasual50.reverse_translation), noChangeCas100);
+    cacheResult('business', 50, makeCachedResult(finalBusiness50, noChangeBus50, sourceText), noChangeBus50);
+    cacheResult('business', 100, makeCachedResult(finalBusiness100, noChangeBus100, noChangeBus50 ? sourceText : finalBusiness50.reverse_translation), noChangeBus100);
+
+    // Step 6: 検証（fire-and-forget）
+    const verifyParams = { sourceText, sourceLang: effectiveSourceLang, targetLang: effectiveTargetLang };
+    if (!noChangeCas50) verifyAndFixOneBand({ bandKey: 'casual_50', tone: 'casual', bucket: 50, originalText: sourceText, translation: finalCasual50.translation, reverseTranslation: finalCasual50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+    if (!noChangeCas100) verifyAndFixOneBand({ bandKey: 'casual_100', tone: 'casual', bucket: 100, originalText: sourceText, translation: casual100Full.translation, reverseTranslation: casual100Full.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+    if (!noChangeBus50) verifyAndFixOneBand({ bandKey: 'business_50', tone: 'business', bucket: 50, originalText: sourceText, translation: finalBusiness50.translation, reverseTranslation: finalBusiness50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+    if (!noChangeBus100) verifyAndFixOneBand({ bandKey: 'business_100', tone: 'business', bucket: 100, originalText: sourceText, translation: finalBusiness100.translation, reverseTranslation: finalBusiness100.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+  };
+
+  // ★ バックグラウンドトーン先行生成（fire-and-forget）
+  const preGenerateToneAdjustments = (params: { sourceText: string; targetLang: string; sourceLang: string }) => {
+    generateAllToneAdjustments(params).catch(error => {
+      console.warn('[preGenerateToneAdjustments] バックグラウンド生成エラー:', error);
+    });
   };
 
   // ══════════════════════════════════════════════
@@ -214,41 +695,61 @@ export default function TranslateScreen({ route }: Props) {
     setLoading(true);
     setError(null);
     const sourceText = inputText;
+    const msgId = Date.now();
+
+    // 翻訳中プレースホルダーを先に追加
+    const placeholderMsg: ChatMessage = {
+      id: msgId,
+      type: 'partner',
+      original: sourceText,
+      translation: '翻訳中...',
+      reverseTranslation: '',
+      explanation: null,
+    };
+    setMessages(prev => [...prev, placeholderMsg]);
+    setInputText('');
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+
+    // クライアント側言語検出 + 言語連動
+    const detected = sourceLang === '自動認識' ? detectLanguage(sourceText) : sourceLang;
+    if (detected) setDetectedLang(detected);
+    if (!selfTargetLangManuallySet.current && detected) {
+      setTargetLang(detected);
+    }
 
     try {
       const result = await translateFull({
         sourceText,
-        sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
+        sourceLang: detected || sourceLang,
         targetLang,
         isNative: false,
+        tone: 'casual',
+        toneLevel: 50,
       });
 
-      // 検出言語を表示
+      // 検出言語を表示 + 言語連動
       if (result.detected_language) {
         setDetectedLang(result.detected_language);
+        if (!selfTargetLangManuallySet.current) {
+          setTargetLang(result.detected_language);
+        }
       }
 
-      const msgId = Date.now();
-      const newMsg: ChatMessage = {
-        id: msgId,
-        type: 'partner',
-        original: sourceText,
-        translation: result.translation,
-        reverseTranslation: result.reverse_translation || '',
-        explanation: null,
-        detectedLanguage: result.detected_language,
-      };
-
-      setMessages(prev => [...prev, newMsg]);
-      setInputText('');
+      // プレースホルダーを結果で更新
+      setMessages(prev => prev.map(m =>
+        m.id === msgId ? {
+          ...m,
+          translation: result.translation,
+        } : m
+      ));
 
       // 自動スクロール
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
-      // バックグラウンドで解説取得
-      const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (result.detected_language || '英語') : sourceLang);
+      // バックグラウンドで解説取得（原文sourceTextを渡す — Web版と同じ）
       const tgtCode = getLangCodeForExplanation(targetLang);
-      generateExplanation(result.translation, srcCode, tgtCode, tgtCode)
+      const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (result.detected_language || '英語') : sourceLang);
+      generateExplanation(sourceText, tgtCode, srcCode, tgtCode)
         .then(exp => {
           setMessages(prev => prev.map(m =>
             m.id === msgId ? { ...m, explanation: exp } : m
@@ -256,7 +757,16 @@ export default function TranslateScreen({ route }: Props) {
         })
         .catch(() => {});
     } catch (err) {
-      setError(err instanceof Error ? err.message : '翻訳に失敗しました');
+      // エラー時はメッセージを更新（削除せず保持）
+      setMessages(prev => prev.map(m =>
+        m.id === msgId
+          ? {
+              ...m,
+              translation: '（翻訳エラー）',
+              explanation: { point: '', explanation: 'エラーが発生しました' },
+            }
+          : m
+      ));
     } finally {
       setLoading(false);
     }
@@ -269,6 +779,33 @@ export default function TranslateScreen({ route }: Props) {
   const handleSelfTranslate = async () => {
     if (!inputText.trim()) return;
 
+    const sourceText = inputText.trim();
+    setPreviewSourceText(sourceText);
+
+    // クライアント側言語検出（Web版と同じ）
+    const detected = sourceLang === '自動認識' ? detectLanguage(sourceText) : sourceLang;
+    if (detected) setDetectedLang(detected);
+
+    const effectiveSourceLang = sourceLang === '自動認識' ? (detected || '自動認識') : sourceLang;
+    const effectiveTargetLang = targetLang;
+    const isLocked = lockedSliderPosition !== null;
+
+    // キャッシュチェック（ベース）
+    const baseCacheKey = getCacheKey('_base', 0, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+    const baseCached = translationCacheRef.current[baseCacheKey];
+
+    if (baseCached && !isLocked) {
+      // ベースキャッシュヒット → 即座に表示
+      setPreview(prev => ({ ...prev, translation: baseCached.translation, reverseTranslation: baseCached.reverseTranslation, noChange: baseCached.noChange }));
+      setShowPreview(true);
+      setToneAdjusted(false);
+      setSliderValue(0);
+      setSliderBucket(0);
+      prevBucketRef.current = 0;
+      preGenerateToneAdjustments({ sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang });
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setShowPreview(false);
@@ -278,84 +815,35 @@ export default function TranslateScreen({ route }: Props) {
     setSliderValue(0);
     setSliderBucket(0);
     prevBucketRef.current = 0;
-    translationCache.current = {};
     setToneDiffExplanation(null);
     setToneDiffExpanded(false);
-    activeSourceText.current = inputText;
 
     try {
-      const result = await translateFull({
-        sourceText: inputText,
-        sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
-        targetLang,
-        isNative: false,
-      });
-
-      if (result.detected_language) {
-        setDetectedLang(result.detected_language);
+      if (isLocked) {
+        // ★ ロック時: ベース + 全4段階を一気に生成
+        await generateAllToneAdjustments({ sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang });
+        setToneAdjusted(true);
+        const { tone, bucket } = sliderToToneBucket(lockedSliderPosition!);
+        const lockedBucket = getSliderBucket(lockedSliderPosition!);
+        setSliderValue(lockedSliderPosition!);
+        setSliderBucket(lockedBucket);
+        prevBucketRef.current = lockedBucket;
+        const lockKey = getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+        const lockCached = translationCacheRef.current[lockKey];
+        if (lockCached) {
+          setPreview(prev => ({ ...prev, translation: lockCached.translation, reverseTranslation: lockCached.reverseTranslation, noChange: lockCached.noChange }));
+        }
+      } else {
+        // ★ 通常時: ベース翻訳のみ → バックグラウンドで4帯先行生成
+        await generateAndCacheUiBuckets({ tone: '_base', sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang, skipPartial: true });
+        const newBaseCached = translationCacheRef.current[baseCacheKey];
+        if (newBaseCached) {
+          setPreview(prev => ({ ...prev, translation: newBaseCached.translation, reverseTranslation: newBaseCached.reverseTranslation, noChange: newBaseCached.noChange }));
+        }
+        preGenerateToneAdjustments({ sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang });
       }
-
-      translationCache.current[getCacheKey('_base', 0)] = result;
-
-      setPreview({
-        translation: result.translation,
-        reverseTranslation: result.reverse_translation || '',
-        explanation: null,
-      });
       setShowPreview(true);
 
-      // バックグラウンドで解説取得
-      const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (result.detected_language || '日本語') : sourceLang);
-      const tgtCode = getLangCodeForExplanation(targetLang);
-      generateExplanation(result.translation, srcCode, tgtCode, srcCode)
-        .then(exp => {
-          setPreview(prev => ({ ...prev, explanation: exp }));
-        })
-        .catch(() => {});
-
-      // ロック中 → 即座にロック位置のトーンを取得
-      if (lockedSliderPosition !== null && lockedSliderPosition !== 0) {
-        const { tone, bucket } = sliderToToneBucket(lockedSliderPosition);
-        const cacheKey = getCacheKey(tone, bucket);
-
-        setToneAdjusted(true);
-        setSliderValue(lockedSliderPosition);
-        setSliderBucket(lockedSliderPosition);
-        prevBucketRef.current = lockedSliderPosition;
-
-        if (!translationCache.current[cacheKey]) {
-          setToneLoading(true);
-          try {
-            const toneResult = await translateFull({
-              sourceText: inputText,
-              sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
-              targetLang,
-              isNative: false,
-              tone,
-              toneLevel: bucket,
-            });
-            translationCache.current[cacheKey] = toneResult;
-            setPreview({
-              translation: toneResult.translation,
-              reverseTranslation: toneResult.reverse_translation || '',
-              explanation: null,
-            });
-          } catch {
-            // ロック位置のトーン取得失敗、ベースを維持
-          } finally {
-            setToneLoading(false);
-          }
-        } else {
-          const cached = translationCache.current[cacheKey];
-          setPreview({
-            translation: cached.translation,
-            reverseTranslation: cached.reverse_translation || '',
-            explanation: null,
-          });
-        }
-      }
-
-      // スクロール
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : '翻訳に失敗しました');
@@ -377,7 +865,7 @@ export default function TranslateScreen({ route }: Props) {
     const newMsg: ChatMessage = {
       id: msgId,
       type: 'self',
-      original: inputText || activeSourceText.current,
+      original: inputText || previewSourceText,
       translation: preview.translation,
       reverseTranslation: preview.reverseTranslation,
       explanation: null,
@@ -394,7 +882,7 @@ export default function TranslateScreen({ route }: Props) {
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
     // バックグラウンドで解説取得
-    const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? '日本語' : sourceLang);
+    const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang);
     const tgtCode = getLangCodeForExplanation(targetLang);
     generateExplanation(preview.translation, srcCode, tgtCode, srcCode)
       .then(exp => {
@@ -410,34 +898,47 @@ export default function TranslateScreen({ route }: Props) {
   // ══════════════════════════════════════════════
 
   const handleToneAdjust = async () => {
-    if (toneAdjusted) {
-      // トグルオフ
-      setToneAdjusted(false);
-      // ベースに戻す
-      const baseResult = translationCache.current[getCacheKey('_base', 0)];
-      if (baseResult) {
-        setPreview({
-          translation: baseResult.translation,
-          reverseTranslation: baseResult.reverse_translation || '',
-          explanation: preview.explanation,
-        });
-      }
+    if (!previewSourceText.trim() || !showPreview) return;
+
+    // カスタムモードを解除
+    setIsCustomActive(false);
+    setShowCustomInput(false);
+
+    const sourceText = previewSourceText;
+    const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
+    const effectiveTargetLang = targetLang;
+
+    // 全4帯キャッシュ済みチェック
+    const allCached = [
+      getCacheKey('casual', 50, sourceText, undefined, effectiveSourceLang, effectiveTargetLang),
+      getCacheKey('casual', 100, sourceText, undefined, effectiveSourceLang, effectiveTargetLang),
+      getCacheKey('business', 50, sourceText, undefined, effectiveSourceLang, effectiveTargetLang),
+      getCacheKey('business', 100, sourceText, undefined, effectiveSourceLang, effectiveTargetLang),
+    ].every(key => Boolean(translationCacheRef.current[key]));
+
+    if (allCached) {
+      // ★ 全キャッシュ済み → 即座にスライダー表示
+      setToneAdjusted(true);
       setSliderValue(0);
       setSliderBucket(0);
       prevBucketRef.current = 0;
-      setToneDiffExplanation(null);
-      setToneDiffExpanded(false);
       return;
     }
 
-    setIsCustomActive(false);
-    setShowCustomInput(false);
-    setToneAdjusted(true);
-    setSliderValue(0);
-    setSliderBucket(0);
-    prevBucketRef.current = 0;
-    setToneDiffExplanation(null);
-    setToneDiffExpanded(false);
+    setToneLoading(true);
+    setError(null);
+
+    try {
+      await generateAllToneAdjustments({ sourceText, targetLang: effectiveTargetLang, sourceLang: effectiveSourceLang });
+      setToneAdjusted(true);
+      setSliderValue(0);
+      setSliderBucket(0);
+      prevBucketRef.current = 0;
+    } catch {
+      setError('トーン調整中にエラーが発生しました');
+    } finally {
+      setToneLoading(false);
+    }
   };
 
   // ══════════════════════════════════════════════
@@ -448,97 +949,139 @@ export default function TranslateScreen({ route }: Props) {
     setSliderValue(value);
   };
 
-  const handleSliderComplete = async (value: number) => {
-    const bucket = getSliderBucket(value);
-    setSliderValue(bucket);
-    setSliderBucket(bucket);
-
-    const { tone, bucket: toneBucket } = sliderToToneBucket(bucket);
-    const cacheKey = getCacheKey(tone, toneBucket);
-
-    const prevBucket = prevBucketRef.current;
-    prevBucketRef.current = bucket;
-
-    // キャッシュヒット
-    if (translationCache.current[cacheKey]) {
-      const cached = translationCache.current[cacheKey];
-      setPreview(prev => ({
-        ...prev,
-        translation: cached.translation,
-        reverseTranslation: cached.reverse_translation || '',
-      }));
-
-      // 差分解説
-      const prevTone = sliderToToneBucket(prevBucket);
-      const prevCacheKey = getCacheKey(prevTone.tone, prevTone.bucket);
-      const prevResult = translationCache.current[prevCacheKey];
-      if (prevResult && prevResult.translation !== cached.translation) {
-        fetchDiffExplanation(prevResult, cached, prevBucket, bucket, tone);
-      }
-      return;
-    }
-
-    // ベースの場合
-    if (tone === '_base') {
-      const baseResult = translationCache.current[getCacheKey('_base', 0)];
-      if (baseResult) {
-        setPreview(prev => ({
-          ...prev,
-          translation: baseResult.translation,
-          reverseTranslation: baseResult.reverse_translation || '',
-        }));
-      }
-      return;
-    }
-
-    // API呼び出し
-    setToneLoading(true);
-    try {
-      const result = await translateFull({
-        sourceText: activeSourceText.current,
-        sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
-        targetLang,
-        isNative: false,
-        tone,
-        toneLevel: toneBucket,
-      });
-      translationCache.current[cacheKey] = result;
-      setPreview(prev => ({
-        ...prev,
-        translation: result.translation,
-        reverseTranslation: result.reverse_translation || '',
-      }));
-
-      // 差分解説
-      const prevTone = sliderToToneBucket(prevBucket);
-      const prevCacheKey = getCacheKey(prevTone.tone, prevTone.bucket);
-      const prevResult = translationCache.current[prevCacheKey];
-      if (prevResult) {
-        fetchDiffExplanation(prevResult, result, prevBucket, bucket, tone);
-      }
-    } catch {
-      setError('トーン調整に失敗しました');
-    } finally {
-      setToneLoading(false);
+  // スライダー変更時（キャッシュ参照のみ — APIは呼ばない）
+  const updatePreviewFromSlider = (sliderPosition: number) => {
+    if (!previewSourceText.trim()) return;
+    const { tone, bucket } = sliderToToneBucket(sliderPosition);
+    const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
+    const cacheKey = getCacheKey(tone, bucket, previewSourceText, undefined, effectiveSourceLang, targetLang);
+    const cached = translationCacheRef.current[cacheKey];
+    if (cached) {
+      setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation, noChange: cached.noChange }));
     }
   };
 
-  // ── 差分解説取得 ──
-  const fetchDiffExplanation = (prev: TranslationResult, curr: TranslationResult, prevBucket: number, currBucket: number, tone: string) => {
-    if (prev.translation === curr.translation) return;
+  const handleSliderComplete = (value: number) => {
+    const bucket = getSliderBucket(value);
+    setSliderValue(bucket);
+    setSliderBucket(bucket);
+    prevBucketRef.current = bucket;
+    updatePreviewFromSlider(bucket);
+  };
+
+  // ── 差分解説取得（Web版と同じ: handleToneDiffExplanation） ──
+  const handleToneDiffExplanation = async () => {
+    // 既に展開中なら閉じる
+    if (toneDiffExpanded) {
+      setToneDiffExpanded(false);
+      return;
+    }
+
+    const { tone: currentTone, bucket: currentInternalBucket } = sliderToToneBucket(sliderBucket);
+    const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
+    const effectiveTargetLang = targetLang;
+
+    // ベース(0)の場合は「この文の伝わり方」を解説
+    if (sliderBucket === 0) {
+      if (!preview.translation) {
+        setToneDiffExplanation({ point: 'この文の伝わり方', explanation: '翻訳がまだ生成されていません。' });
+        setToneDiffExpanded(true);
+        return;
+      }
+      setToneDiffLoading(true);
+      setToneDiffExpanded(true);
+      const sourceLangCode0 = getLangCodeFromName(effectiveSourceLang);
+      const targetLangCode0 = getLangCodeFromName(effectiveTargetLang);
+      try {
+        const explanation = await generateExplanation(preview.translation, sourceLangCode0, targetLangCode0, sourceLangCode0);
+        setToneDiffExplanation({ point: explanation.point || getDifferenceFromText(sourceLangCode0, 0), explanation: explanation.explanation });
+      } catch {
+        setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode0, 0), explanation: getFailedToGenerateText(sourceLangCode0) });
+      } finally {
+        setToneDiffLoading(false);
+      }
+      return;
+    }
+
+    // 1つ前のトーンを計算
+    const getPreviousTone = (tone: string, bucket: number): { tone: string; bucket: number } => {
+      if (tone === 'casual' && bucket === 100) return { tone: 'casual', bucket: 50 };
+      if (tone === 'casual' && bucket === 50) return { tone: '_base', bucket: 0 };
+      if (tone === 'business' && bucket === 50) return { tone: '_base', bucket: 0 };
+      if (tone === 'business' && bucket === 100) return { tone: 'business', bucket: 50 };
+      return { tone: '_base', bucket: 0 };
+    };
+
+    const prev = getPreviousTone(currentTone, currentInternalBucket);
+    const prevKey = getCacheKey(prev.tone, prev.bucket, previewSourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+    const currKey = getCacheKey(currentTone, currentInternalBucket, previewSourceText, undefined, effectiveSourceLang, effectiveTargetLang);
+    const prevCached = translationCacheRef.current[prevKey];
+    const currCached = translationCacheRef.current[currKey];
+    const sourceLangCode = getLangCodeFromName(effectiveSourceLang);
+    const prevUiBucket = prev.tone === 'casual' ? -prev.bucket : prev.tone === 'business' ? prev.bucket : 0;
+
+    if (!prevCached || !currCached) {
+      setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getNotYetGeneratedText(sourceLangCode) });
+      setToneDiffExpanded(true);
+      return;
+    }
+
     setToneDiffLoading(true);
-    setToneDiffExplanation(null);
     setToneDiffExpanded(true);
-    const srcCode = sourceLang === '日本語' ? 'ja' : getLangCodeForExplanation(sourceLang);
-    generateToneDifferenceExplanation(
-      prev.translation, curr.translation,
-      prevBucket, currBucket,
-      tone === '_base' ? 'business' : tone,
-      srcCode,
-    )
-      .then(exp => setToneDiffExplanation(exp))
-      .catch(() => {})
-      .finally(() => setToneDiffLoading(false));
+    try {
+      const keywords = extractChangedParts(prevCached.translation, currCached.translation);
+      const explanation = await generateToneDifferenceExplanation(
+        prevCached.translation, currCached.translation, prevUiBucket, currentInternalBucket, currentTone, sourceLangCode, keywords ?? undefined
+      );
+      setToneDiffExplanation(explanation);
+    } catch {
+      setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getFailedToGenerateText(sourceLangCode) });
+    } finally {
+      setToneDiffLoading(false);
+    }
+  };
+
+  // ── 解説テキストのnuance/grammar分離+ハイライト表示（Web版と同じ） ──
+  const renderExplanationWithSplit = (text: string) => {
+    const sepParts = text.split(/\n---\n|^---\n|\n---$/m);
+    let nuance: string, grammar: string;
+    if (sepParts.length >= 2) {
+      nuance = sepParts[0].trim();
+      grammar = sepParts.slice(1).join('\n').trim();
+    } else {
+      const splitMatch = text.match(/^(.*?。)\s*([\s\S]+)$/) || text.match(/^(.*?\.\s)([A-Z「][\s\S]+)$/);
+      nuance = splitMatch ? splitMatch[1] : text;
+      grammar = splitMatch ? splitMatch[2] : '';
+    }
+    const langCode = getLangCodeFromName(detectedLang || '日本語');
+    return (
+      <>
+        {nuance ? (
+          <View style={styles.nuanceTipBox}>
+            <Text style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>
+          </View>
+        ) : null}
+        {grammar ? (
+          <View style={styles.grammarTipBox}>
+            <Text style={styles.grammarTipLabel}>{getGrammarLabel(langCode)}</Text>
+            <Text style={styles.grammarTipText}>{renderWithHighlight(grammar)}</Text>
+          </View>
+        ) : null}
+      </>
+    );
+  };
+
+  // 「」内をハイライト表示するヘルパー（Web版renderWithHighlight相当）
+  const renderWithHighlight = (text: string): React.ReactNode => {
+    const parts = text.split(/(「[^」]+」)/g);
+    if (parts.length === 1) return text;
+    return parts.map((part, i) => {
+      const match = part.match(/^「(.+)」$/);
+      if (match) {
+        return <Text key={i} style={styles.grammarHighlight}>{match[1]}</Text>;
+      }
+      return part;
+    });
   };
 
   // ══════════════════════════════════════════════
@@ -549,15 +1092,7 @@ export default function TranslateScreen({ route }: Props) {
     if (isCustomActive) {
       setIsCustomActive(false);
       setShowCustomInput(false);
-      // ベースに戻す
-      const baseResult = translationCache.current[getCacheKey('_base', 0)];
-      if (baseResult) {
-        setPreview(prev => ({
-          ...prev,
-          translation: baseResult.translation,
-          reverseTranslation: baseResult.reverse_translation || '',
-        }));
-      }
+      // プレビューは維持（Web版と同じ）
     } else {
       setIsCustomActive(true);
       setShowCustomInput(true);
@@ -568,22 +1103,23 @@ export default function TranslateScreen({ route }: Props) {
   };
 
   const handleCustomTranslate = async (toneText: string) => {
-    if (!toneText.trim() || !activeSourceText.current) return;
+    if (!toneText.trim() || !previewSourceText.trim()) return;
 
     setToneLoading(true);
     try {
-      const result = await translateFull({
-        sourceText: activeSourceText.current,
-        sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
+      await generateAndCacheUiBuckets({
+        tone: 'custom',
+        sourceText: previewSourceText,
         targetLang,
-        isNative: false,
-        customTone: toneText,
+        sourceLang: sourceLang === '自動認識' ? '自動認識' : sourceLang,
+        customToneOverride: toneText,
       });
-      setPreview(prev => ({
-        ...prev,
-        translation: result.translation,
-        reverseTranslation: result.reverse_translation || '',
-      }));
+      // キャッシュから現在のバケットの結果を表示
+      const cacheKey = getCacheKey('custom', 0, previewSourceText, toneText, sourceLang === '自動認識' ? '自動認識' : sourceLang, targetLang);
+      const cached = translationCacheRef.current[cacheKey];
+      if (cached) {
+        setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation }));
+      }
     } catch {
       setError('カスタムトーン翻訳に失敗しました');
     } finally {
@@ -598,8 +1134,10 @@ export default function TranslateScreen({ route }: Props) {
   const handleLockToggle = () => {
     if (lockedSliderPosition !== null) {
       setLockedSliderPosition(null);
+      AsyncStorage.removeItem('nijilingo_locked_slider_position').catch(() => {});
     } else {
       setLockedSliderPosition(sliderBucket);
+      AsyncStorage.setItem('nijilingo_locked_slider_position', JSON.stringify(sliderBucket)).catch(() => {});
     }
   };
 
@@ -624,20 +1162,36 @@ export default function TranslateScreen({ route }: Props) {
             （{isSelf ? msg.reverseTranslation : msg.translation}）
           </Text>
 
-          {/* 解説トグル */}
-          <TouchableOpacity
-            onPress={() => {
-              setExpandedId(isExpanded ? null : msg.id);
-              if (!isExpanded) {
-                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
-              }
-            }}
-            style={styles.explanationToggle}
-          >
-            <Text style={[styles.explanationToggleText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
-              {isExpanded ? '▲ 解説を閉じる' : '▼ 解説'}
-            </Text>
-          </TouchableOpacity>
+          {/* コピー＆解説トグル行 */}
+          <View style={styles.bubbleActionsRow}>
+            <TouchableOpacity
+              onPress={() => {
+                const textToCopy = isSelf ? msg.translation : msg.original;
+                copyToClipboard(textToCopy);
+                setCopiedMessageId(msg.id);
+                setTimeout(() => setCopiedMessageId(null), 2000);
+              }}
+              style={styles.bubbleCopyBtn}
+            >
+              <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
+                {copiedMessageId === msg.id ? '✓ コピー済み' : '📋 コピー'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setExpandedId(isExpanded ? null : msg.id);
+                if (!isExpanded) {
+                  setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
+                }
+              }}
+              style={styles.explanationToggle}
+            >
+              <Text style={[styles.explanationToggleText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
+                {isExpanded ? '▲ 解説を閉じる' : '▼ 解説'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* 展開された解説 */}
           {isExpanded && (
@@ -645,10 +1199,15 @@ export default function TranslateScreen({ route }: Props) {
               {msg.explanation ? (
                 <>
                   {msg.explanation.point ? (
-                    <View style={styles.explanationPointRow}>
+                    <LinearGradient
+                      colors={['#FFF9E6', '#FFF3CD']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.explanationPointRow}
+                    >
                       <Text style={styles.pointIcon}>💡</Text>
-                      <Text style={styles.pointText}>{msg.explanation.point}</Text>
-                    </View>
+                      <Text style={[styles.pointText, !isSelf && styles.pointTextPartner]}>{msg.explanation.point}</Text>
+                    </LinearGradient>
                   ) : null}
                   <Text style={styles.explanationDetailText}>{msg.explanation.explanation}</Text>
                 </>
@@ -669,7 +1228,7 @@ export default function TranslateScreen({ route }: Props) {
   // 描画
   // ══════════════════════════════════════════════
 
-  const hasTranslationResult = showPreview || translationCache.current[getCacheKey('_base', 0)] !== undefined;
+  const hasTranslationResult = showPreview && Boolean(preview.translation.trim());
 
   return (
     <KeyboardAvoidingView
@@ -731,16 +1290,30 @@ export default function TranslateScreen({ route }: Props) {
         <View style={styles.previewContainer}>
           <View style={styles.previewLabelRow}>
             <Text style={styles.previewLabel}>翻訳プレビュー</Text>
+            {preview.noChange && <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>（変化なし）</Text>}
+            {(() => {
+              const tb = sliderToToneBucket(sliderBucket);
+              const bk = `${tb.tone}_${tb.bucket}`;
+              const vs = verificationStatus[bk];
+              const lc = getLangCodeFromName(detectedLang || '日本語');
+              return vs === 'fixing'
+                ? <Text style={{ color: '#e67e22', fontSize: 12, marginLeft: 8 }}>{getFixingText(lc)}</Text>
+                : vs === 'verifying'
+                  ? <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>{getVerifyingText(lc)}</Text>
+                  : vs === 'passed'
+                    ? <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 8 }}>{getNaturalnessCheckLabel(lc)}</Text>
+                    : null;
+            })()}
             {toneLoading && <ActivityIndicator size="small" color="#4A90D9" style={{ marginLeft: 8 }} />}
           </View>
           <Text selectable style={styles.previewTranslation}>{preview.translation}</Text>
-          <Text style={styles.previewReverse}>（{preview.reverseTranslation}）</Text>
+          <Text style={styles.previewReverse}>逆翻訳：{preview.reverseTranslation}</Text>
 
-          {/* トーン差分解説トグル */}
-          {(toneDiffExplanation || toneDiffLoading || preview.explanation) && (
+          {/* トーン差分解説トグル（Web版と同じ: !isCustomActive時に常時表示） */}
+          {!isCustomActive && (
             <View style={styles.toneDiffSection}>
               <TouchableOpacity
-                onPress={() => setToneDiffExpanded(!toneDiffExpanded)}
+                onPress={handleToneDiffExplanation}
                 style={styles.explanationToggle}
               >
                 <Text style={[styles.explanationToggleText, styles.toggleSelf]}>
@@ -758,22 +1331,17 @@ export default function TranslateScreen({ route }: Props) {
                   ) : toneDiffExplanation ? (
                     <>
                       {toneDiffExplanation.point ? (
-                        <View style={styles.explanationPointRow}>
+                        <LinearGradient
+                          colors={['#FFF9E6', '#FFF3CD']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.explanationPointRow}
+                        >
                           <Text style={styles.pointIcon}>💡</Text>
                           <Text style={styles.pointText}>{toneDiffExplanation.point}</Text>
-                        </View>
+                        </LinearGradient>
                       ) : null}
-                      <Text style={styles.explanationDetailText}>{toneDiffExplanation.explanation}</Text>
-                    </>
-                  ) : preview.explanation ? (
-                    <>
-                      {preview.explanation.point ? (
-                        <View style={styles.explanationPointRow}>
-                          <Text style={styles.pointIcon}>💡</Text>
-                          <Text style={styles.pointText}>{preview.explanation.point}</Text>
-                        </View>
-                      ) : null}
-                      <Text style={styles.explanationDetailText}>{preview.explanation.explanation}</Text>
+                      {renderExplanationWithSplit(toneDiffExplanation.explanation)}
                     </>
                   ) : null}
                 </View>
@@ -783,7 +1351,90 @@ export default function TranslateScreen({ route }: Props) {
         </View>
       )}
 
-      {/* ═══ selfモード: ニュアンス調整エリア ═══ */}
+      {/* ═══ 入力エリア ═══ */}
+      <View style={[styles.inputArea, isPartnerMode ? styles.inputAreaPartner : styles.inputAreaSelf]}>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            placeholder={isPartnerMode ? '相手のメッセージを貼り付け...' : 'メッセージを入力...'}
+            placeholderTextColor="#9CA3AF"
+            value={inputText}
+            onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
+            multiline
+            numberOfLines={2}
+          />
+
+          <View style={styles.btnStack}>
+            {isPartnerMode ? (
+              <>
+                <TouchableOpacity style={styles.pasteBtn} onPress={handlePaste}>
+                  <Text style={styles.pasteBtnText}>ペースト</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handlePartnerTranslate}
+                  disabled={loading || !inputText.trim()}
+                  style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
+                >
+                  <LinearGradient
+                    colors={['#B5EAD7', '#C7CEEA']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.translateBtn}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#333" />
+                    ) : (
+                      <Text style={styles.translateBtnText}>翻訳</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  onPress={handleSelfTranslate}
+                  disabled={loading || !inputText.trim()}
+                  style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
+                >
+                  <LinearGradient
+                    colors={['#E2F0CB', '#B5EAD7']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.convertBtn}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#333" />
+                    ) : (
+                      <Text style={styles.convertBtnText}>翻訳</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSelfSend}
+                  disabled={!showPreview}
+                  style={!showPreview ? styles.btnDisabled : undefined}
+                >
+                  <LinearGradient
+                    colors={['#d4a5c9', '#b8c4e0']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendBtn}
+                  >
+                    <Text style={styles.sendBtnText}>📋 コピー</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* 検出言語（入力行の下に表示） */}
+        {detectedLang && sourceLang === '自動認識' && (
+          <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
+        )}
+      </View>
+
+      {/* ═══ selfモード: ニュアンス調整エリア（入力の下） ═══ */}
       {isSelfMode && showPreview && (
         <View style={styles.nuanceContainer}>
           {/* スライダー（トーン調整がアクティブな時のみ） */}
@@ -833,23 +1484,37 @@ export default function TranslateScreen({ route }: Props) {
           {/* トーン調整 / カスタム / ロック ボタン行 */}
           <View style={styles.toneActionsRow}>
             <TouchableOpacity
-              style={[styles.toneBtn, toneAdjusted && !isCustomActive && styles.toneBtnActive]}
               onPress={handleToneAdjust}
               disabled={!hasTranslationResult || loading}
+              style={[styles.toneBtnOuter, (!hasTranslationResult || loading) && styles.btnDisabled]}
             >
-              <Text style={[styles.toneBtnText, toneAdjusted && !isCustomActive && styles.toneBtnTextActive]}>
-                🎨 トーン調整
-              </Text>
+              <LinearGradient
+                colors={toneAdjusted && !isCustomActive ? ['#667eea', '#764ba2'] : ['#B5EAD7', '#C7CEEA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.toneBtn, toneAdjusted && !isCustomActive && styles.toneBtnActive]}
+              >
+                <Text style={[styles.toneBtnText, toneAdjusted && !isCustomActive && styles.toneBtnTextActive]}>
+                  🎨 トーン調整
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.toneBtn, isCustomActive && styles.toneBtnActive]}
               onPress={handleCustomToggle}
               disabled={!hasTranslationResult || loading}
+              style={[styles.toneBtnOuter, (!hasTranslationResult || loading) && styles.btnDisabled]}
             >
-              <Text style={[styles.toneBtnText, isCustomActive && styles.toneBtnTextActive]}>
-                カスタム
-              </Text>
+              <LinearGradient
+                colors={['#fdf2f8', '#fce7f3']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.customBtn, isCustomActive && styles.customBtnActive]}
+              >
+                <Text style={styles.customBtnText}>
+                  カスタム
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -908,68 +1573,6 @@ export default function TranslateScreen({ route }: Props) {
         </View>
       )}
 
-      {/* ═══ 入力エリア ═══ */}
-      <View style={[styles.inputArea, isPartnerMode ? styles.inputAreaPartner : styles.inputAreaSelf]}>
-        {/* 検出言語 */}
-        {detectedLang && sourceLang === '自動認識' && (
-          <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
-        )}
-
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder={isPartnerMode ? '相手のメッセージを貼り付け...' : 'メッセージを入力...'}
-            placeholderTextColor="#9CA3AF"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            numberOfLines={2}
-          />
-
-          <View style={styles.btnStack}>
-            {isPartnerMode ? (
-              <>
-                <TouchableOpacity style={styles.pasteBtn} onPress={handlePaste}>
-                  <Text style={styles.pasteBtnText}>ペースト</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.translateBtn, (loading || !inputText.trim()) && styles.btnDisabled]}
-                  onPress={handlePartnerTranslate}
-                  disabled={loading || !inputText.trim()}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#333" />
-                  ) : (
-                    <Text style={styles.translateBtnText}>翻訳</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={[styles.convertBtn, (loading || !inputText.trim()) && styles.btnDisabled]}
-                  onPress={handleSelfTranslate}
-                  disabled={loading || !inputText.trim()}
-                >
-                  {loading ? (
-                    <ActivityIndicator size="small" color="#333" />
-                  ) : (
-                    <Text style={styles.convertBtnText}>翻訳</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.sendBtn, !showPreview && styles.btnDisabled]}
-                  onPress={handleSelfSend}
-                  disabled={!showPreview}
-                >
-                  <Text style={styles.sendBtnText}>📋 コピー</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
-      </View>
-
       {/* ── コピー完了トースト ── */}
       {showCopiedToast && (
         <View style={styles.toast}>
@@ -1003,6 +1606,7 @@ export default function TranslateScreen({ route }: Props) {
                         setSourceLang(item.name);
                       } else {
                         setTargetLang(item.name);
+                        selfTargetLangManuallySet.current = true;
                       }
                       setLangModalVisible(false);
                     }}
@@ -1112,7 +1716,7 @@ const styles = StyleSheet.create({
 
   // ── バブル ──
   messageBubble: {
-    maxWidth: '85%',
+    maxWidth: '80%',
     borderRadius: 18,
     padding: 8,
     paddingHorizontal: 12,
@@ -1138,7 +1742,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333333',
+    color: '#111827',
     lineHeight: 21,
     marginBottom: 2,
   },
@@ -1149,9 +1753,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // ── バブルアクション行 ──
+  bubbleActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  bubbleCopyBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  bubbleCopyText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
   // ── 解説 ──
   explanationToggle: {
-    marginTop: 10,
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
@@ -1180,7 +1799,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,249,230,0.8)',
     borderRadius: 12,
     padding: 10,
     paddingHorizontal: 14,
@@ -1196,10 +1814,40 @@ const styles = StyleSheet.create({
     color: '#333333',
     lineHeight: 20,
   },
+  pointTextPartner: {
+    color: '#2D5A7B',
+  },
   explanationDetailText: {
     fontSize: 14,
     color: '#444',
     lineHeight: 24,
+  },
+  nuanceTipBox: {
+    backgroundColor: '#f0f7ff',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 6,
+  },
+  grammarTipBox: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    padding: 10,
+  },
+  grammarTipLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: '#888',
+    marginBottom: 4,
+  },
+  grammarTipText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 20,
+  },
+  grammarHighlight: {
+    backgroundColor: '#fff3cd',
+    fontWeight: '600' as const,
+    color: '#333',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -1243,7 +1891,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderTopWidth: 2,
     borderTopColor: '#B5EAD7',
-    maxHeight: 250,
+    maxHeight: 260,
   },
   previewLabelRow: {
     flexDirection: 'row',
@@ -1349,19 +1997,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  toneBtn: {
+  toneBtnOuter: {
     flex: 1,
+  },
+  toneBtn: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   toneBtnActive: {
-    backgroundColor: '#F0F2F5',
-    borderColor: '#6366f1',
+    borderColor: '#667eea',
   },
   toneBtnText: {
     fontSize: 13,
@@ -1369,7 +2017,23 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   toneBtnTextActive: {
-    color: '#6366f1',
+    color: '#FFFFFF',
+  },
+  customBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  customBtnActive: {
+    borderColor: '#ec4899',
+  },
+  customBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#db2777',
   },
   lockBtn: {
     paddingVertical: 10,
@@ -1458,7 +2122,7 @@ const styles = StyleSheet.create({
   detectedLangText: {
     fontSize: 11,
     color: '#9CA3AF',
-    marginBottom: 6,
+    marginTop: 4,
   },
   inputRow: {
     flexDirection: 'row',
@@ -1499,7 +2163,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
-    backgroundColor: '#B5EAD7',
     alignItems: 'center',
   },
   translateBtnText: {
@@ -1513,7 +2176,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
-    backgroundColor: '#B5EAD7',
     alignItems: 'center',
   },
   convertBtnText: {
@@ -1525,7 +2187,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 8,
-    backgroundColor: '#d4a5c9',
     alignItems: 'center',
   },
   sendBtnText: {
