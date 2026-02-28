@@ -1,9 +1,13 @@
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView } from 'react-native';
+import { Alert, StyleSheet, Text, View, TouchableOpacity, SafeAreaView } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAppData } from '../context/AppDataContext';
 
 type RootStackParamList = {
   Home: undefined;
   Translate: { mode: 'receive' | 'send' };
+  List: undefined;
+  FaceToFace: { partnerId?: number };
+  Settings: { partnerId: number };
 };
 
 type Props = {
@@ -11,6 +15,7 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
+  const { currentPartnerId } = useAppData();
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -43,17 +48,35 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* サブボタン */}
         <View style={styles.subButtons}>
-          <TouchableOpacity style={styles.subButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.subButton}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('List')}
+          >
             <Text style={styles.subButtonIcon}>💬</Text>
             <Text style={styles.subButtonText}>トークルーム</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.subButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.subButton}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('FaceToFace', { partnerId: currentPartnerId ?? undefined })}
+          >
             <Text style={styles.subButtonIcon}>🎤</Text>
             <Text style={styles.subButtonText}>対面モード</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.subButton} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.subButton}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (!currentPartnerId) {
+                Alert.alert('設定', '設定する相手がいません。\nトークルームから相手を追加してください。');
+                return;
+              }
+              navigation.navigate('Settings', { partnerId: currentPartnerId });
+            }}
+          >
             <Text style={styles.subButtonIcon}>⚙️</Text>
             <Text style={styles.subButtonText}>設定</Text>
           </TouchableOpacity>
