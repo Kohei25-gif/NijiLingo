@@ -1244,30 +1244,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* ── 言語選択バー（partnerモード時のみ上部表示。selfモードは入力セクション内に統合） ── */}
-      {isPartnerMode && (
-        <View style={[styles.langBar, styles.langBarPartner]}>
-          <TouchableOpacity
-            style={styles.langButton}
-            onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
-          >
-            <Text style={styles.langButtonText}>
-              {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.langArrow}>→</Text>
-
-          <TouchableOpacity
-            style={styles.langButton}
-            onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
-          >
-            <Text style={styles.langButtonText}>
-              {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* ── 言語選択バー削除: Web版と同じく入力エリア内に統合 ── */}
 
       {/* ── メッセージボード ── */}
       <ScrollView
@@ -1364,19 +1341,53 @@ export default function TranslateScreen({ route, navigation }: Props) {
       {/* ═══ 入力エリア ═══ */}
       {isPartnerMode ? (
         <View style={[styles.inputArea, styles.inputAreaPartner]}>
+          {/* セクションヘッダー: ←戻る + 言語セレクター（Web版と同じ構造） */}
+          <View style={styles.sectionHeader}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.collapseBtn}>
+              <Text style={styles.collapseBtnText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.langSelectorsCompact}>
+              <TouchableOpacity
+                style={styles.langSelectCompact}
+                onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
+              >
+                <Text style={styles.langSelectText}>
+                  {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.langArrowCompact}>→</Text>
+              <TouchableOpacity
+                style={styles.langSelectCompact}
+                onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
+              >
+                <Text style={styles.langSelectText}>
+                  {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* テキスト入力行（Web版と同じ: textarea + ペースト/翻訳ボタン） */}
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={styles.partnerTextarea}
               placeholder="相手のメッセージを貼り付け..."
               placeholderTextColor="#9CA3AF"
               value={inputText}
               onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
               multiline
-              numberOfLines={2}
+              numberOfLines={4}
+              textAlignVertical="top"
             />
             <View style={styles.btnStack}>
-              <TouchableOpacity style={styles.pasteBtn} onPress={handlePaste}>
-                <Text style={styles.pasteBtnText}>ペースト</Text>
+              <TouchableOpacity onPress={handlePaste}>
+                <LinearGradient
+                  colors={['#FFB7B2', '#FFDAC1']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.pasteBtn}
+                >
+                  <Text style={styles.pasteBtnText}>ペースト</Text>
+                </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handlePartnerTranslate}
@@ -1398,31 +1409,45 @@ export default function TranslateScreen({ route, navigation }: Props) {
               </TouchableOpacity>
             </View>
           </View>
-          {detectedLang && sourceLang === '自動認識' && (
-            <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
-          )}
+          {/* フッター行（検出言語 + モード切替） */}
+          <View style={styles.inputFooterRow}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Translate', { mode: 'send' })}
+              style={styles.modeSwitchBtn}
+            >
+              <Text style={styles.modeSwitchBtnText}>✍️ 送る文章へ</Text>
+            </TouchableOpacity>
+            {detectedLang && sourceLang === '自動認識' && (
+              <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
+            )}
+          </View>
         </View>
       ) : (
         <View style={[styles.inputArea, styles.inputAreaSelf]}>
-          {/* selfモード: 言語セレクター（Web版と同じく入力セクション内） */}
-          <View style={styles.selfLangRow}>
-            <TouchableOpacity
-              style={styles.langButton}
-              onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
-            >
-              <Text style={styles.langButtonText}>
-                {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
-              </Text>
+          {/* selfモード: セクションヘッダー（← + 言語セレクター） */}
+          <View style={styles.sectionHeader}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.collapseBtn}>
+              <Text style={styles.collapseBtnText}>←</Text>
             </TouchableOpacity>
-            <Text style={styles.langArrow}>→</Text>
-            <TouchableOpacity
-              style={styles.langButton}
-              onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
-            >
-              <Text style={styles.langButtonText}>
-                {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.langSelectorsCompact}>
+              <TouchableOpacity
+                style={styles.langSelectCompact}
+                onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
+              >
+                <Text style={styles.langSelectText}>
+                  {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
+                </Text>
+              </TouchableOpacity>
+              <Text style={styles.langArrowCompact}>→</Text>
+              <TouchableOpacity
+                style={styles.langSelectCompact}
+                onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
+              >
+                <Text style={styles.langSelectText}>
+                  {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* selfモード: 大きいtextarea + 翻訳ボタン + 確定ボタン（Web版と同じ配置） */}
@@ -1700,45 +1725,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F7F2',
   },
 
-  // ── 言語バー ──
-  langBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  langBarPartner: {
-    backgroundColor: 'rgba(255,219,193,0.2)',
-  },
-  langBarSelf: {
-    backgroundColor: 'rgba(181,234,215,0.2)',
-  },
-  langButton: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  langButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#333333',
-    fontFamily: 'Quicksand_500Medium',
-  },
-  langArrow: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontFamily: 'Quicksand_400Regular',
-  },
-
   // ── メッセージボード ──
   messagesArea: {
     flex: 1,
@@ -1766,7 +1752,6 @@ const styles = StyleSheet.create({
   // ── メッセージ行 ──
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 12,
   },
   messageRowSelf: {
     justifyContent: 'flex-end',
@@ -1777,10 +1762,11 @@ const styles = StyleSheet.create({
 
   // ── バブル ──
   messageBubble: {
-    maxWidth: '80%',
+    maxWidth: '85%',
     borderRadius: 18,
     padding: 8,
     paddingHorizontal: 12,
+    marginBottom: 10,
   },
   bubbleSelf: {
     backgroundColor: '#E3FDFD',
@@ -1803,7 +1789,7 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111827',
+    color: '#333333',
     lineHeight: 21,
     marginBottom: 2,
     fontFamily: 'Quicksand_600SemiBold',
@@ -1980,7 +1966,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   previewLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#9CA3AF',
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -1990,7 +1976,7 @@ const styles = StyleSheet.create({
   previewTranslation: {
     color: '#333333',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 17,
     marginTop: 8,
     lineHeight: 24,
     fontFamily: 'Quicksand_700Bold',
@@ -2010,7 +1996,8 @@ const styles = StyleSheet.create({
   nuanceContainer: {
     backgroundColor: '#F0F2F5',
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 20,
     gap: 12,
   },
 
@@ -2084,13 +2071,16 @@ const styles = StyleSheet.create({
   toneActionsRow: {
     flexDirection: 'row',
     gap: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   toneBtnOuter: {
     flex: 1,
   },
   toneBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     borderWidth: 2,
@@ -2110,7 +2100,7 @@ const styles = StyleSheet.create({
   },
   customBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
     borderWidth: 2,
@@ -2201,11 +2191,83 @@ const styles = StyleSheet.create({
 
   // ── 入力エリア ──
   inputArea: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  // セクションヘッダー（← + 言語セレクター）
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  collapseBtn: {
+    padding: 4,
+  },
+  collapseBtnText: {
+    fontSize: 18,
+    color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  langSelectorsCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  langSelectCompact: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+  },
+  langSelectText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#333',
+    fontFamily: 'Quicksand_500Medium',
+  },
+  langArrowCompact: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontFamily: 'Quicksand_400Regular',
+  },
+  // パートナーモード用テキストエリア（Web版と同じ大きさ）
+  partnerTextarea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333',
+    minHeight: 100,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    fontFamily: 'Quicksand_400Regular',
+  },
+  // フッター行
+  inputFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+  },
+  modeSwitchBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    backgroundColor: '#f0f4ff',
+    borderRadius: 6,
+  },
+  modeSwitchBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5b6abf',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   inputAreaPartner: {
     backgroundColor: 'rgba(255,219,193,0.2)',
@@ -2214,7 +2276,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(181,234,215,0.2)',
   },
   detectedLangText: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#9CA3AF',
     marginTop: 4,
     fontFamily: 'Quicksand_400Regular',
@@ -2223,19 +2285,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'stretch',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#333',
-    maxHeight: 100,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
-    fontFamily: 'Quicksand_400Regular',
   },
   translateInputWrapper: {
     flex: 1,
@@ -2259,42 +2308,23 @@ const styles = StyleSheet.create({
     minHeight: 80,
     fontFamily: 'Quicksand_400Regular',
   },
-  selfLangRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
   selfFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: 6,
-  },
-  modeSwitchBtn: {
-    backgroundColor: 'rgba(181,234,215,0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  modeSwitchBtnText: {
-    fontSize: 12,
-    color: '#555',
-    fontWeight: '500',
-    fontFamily: 'Quicksand_500Medium',
   },
   btnStack: {
     gap: 6,
     justifyContent: 'center',
+    flexShrink: 0,
   },
 
   // partner ボタン
   pasteBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#FFB7B2',
     alignItems: 'center',
   },
   pasteBtnText: {
@@ -2305,7 +2335,7 @@ const styles = StyleSheet.create({
   },
   translateBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -2319,7 +2349,7 @@ const styles = StyleSheet.create({
   // self ボタン
   convertBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
@@ -2331,7 +2361,7 @@ const styles = StyleSheet.create({
   },
   sendBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
