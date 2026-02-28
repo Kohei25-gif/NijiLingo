@@ -484,7 +484,7 @@ export async function translatePartialSpacy(options: {
     ? `【意味の制約】\n以下の語の意味を翻訳に必ず反映すること:\n${meaningConstraint}`
     : '';
 
-  // ルールをトーンより先に配置: 意味制約が主、トーン調整が従
+  // ルールをトーンより先に配置: 意味制約が主、ニュアンス調整が従
   const userPrompt = [
     `Output language: ${targetLangEnglish}`,
     ...(referenceTranslation

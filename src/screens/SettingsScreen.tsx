@@ -9,6 +9,8 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Camera } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { useAppData } from '../context/AppDataContext';
@@ -79,45 +81,66 @@ export default function SettingsScreen({ route, navigation }: Props) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>相手の設定</Text>
 
+      {/* アバタープレビュー */}
       <View style={styles.avatarPreview}>
         {editAvatarImage ? (
           <Image source={{ uri: editAvatarImage }} style={styles.avatarImage} />
         ) : (
-          <Text style={styles.avatarEmoji}>{editAvatar || '👤'}</Text>
+          <LinearGradient
+            colors={['#FFDAC1', '#E2F0CB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarEmojiContainer}
+          >
+            <Text style={styles.avatarEmoji}>{editAvatar || '👤'}</Text>
+          </LinearGradient>
         )}
       </View>
 
+      {/* 絵文字アイコン */}
       <Text style={styles.sectionLabel}>絵文字アイコン</Text>
       <View style={styles.avatarOptions}>
         {AVATAR_OPTIONS.map(avatar => (
           <TouchableOpacity
             key={avatar}
             onPress={() => { setEditAvatar(avatar); setEditAvatarImage(null); }}
-            style={[styles.avatarOption, editAvatar === avatar && !editAvatarImage && styles.avatarOptionActive]}
+            style={[
+              styles.avatarOption,
+              editAvatar === avatar && !editAvatarImage && styles.avatarOptionActive,
+            ]}
           >
             <Text style={styles.avatarOptionText}>{avatar}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* 画像アップロード */}
       <Text style={styles.sectionLabel}>画像をアップロード</Text>
-      <View style={styles.imageButtons}>
-        <TouchableOpacity onPress={handleImagePick} style={styles.imagePickBtn}>
-          <Text style={styles.imagePickText}>画像を選択</Text>
+      <TouchableOpacity onPress={handleImagePick} style={styles.uploadBtn}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Camera size={16} color="#9CA3AF" strokeWidth={2} />
+          <Text style={styles.uploadBtnText}>画像を選択</Text>
+        </View>
+      </TouchableOpacity>
+      {editAvatarImage && (
+        <TouchableOpacity
+          onPress={() => { setEditAvatarImage(null); setEditAvatar('👤'); }}
+          style={styles.removeImageBtn}
+        >
+          <Text style={styles.removeImageBtnText}>画像を削除</Text>
         </TouchableOpacity>
-        {editAvatarImage && (
-          <TouchableOpacity
-            onPress={() => { setEditAvatarImage(null); setEditAvatar('👤'); }}
-            style={styles.imageRemoveBtn}
-          >
-            <Text style={styles.imageRemoveText}>画像を削除</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      )}
 
+      {/* 名前 */}
       <Text style={styles.sectionLabel}>名前</Text>
-      <TextInput style={styles.input} value={editName} onChangeText={setEditName} />
+      <TextInput
+        style={styles.input}
+        value={editName}
+        onChangeText={setEditName}
+        placeholderTextColor="#9CA3AF"
+      />
 
+      {/* 言語 */}
       <Text style={styles.sectionLabel}>言語</Text>
       <View style={styles.languageList}>
         {LANGUAGE_OPTIONS.map(lang => (
@@ -126,18 +149,21 @@ export default function SettingsScreen({ route, navigation }: Props) {
             onPress={() => setEditLanguage(lang.name)}
             style={[styles.languageItem, editLanguage === lang.name && styles.languageItemActive]}
           >
-            <Text style={styles.languageItemText}>{lang.flag} {lang.name}</Text>
+            <Text style={[styles.languageItemText, editLanguage === lang.name && styles.languageItemTextActive]}>
+              {lang.flag} {lang.name}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* タグ */}
       <Text style={styles.sectionLabel}>タグ</Text>
       <View style={styles.tagList}>
         <TouchableOpacity
           onPress={() => setEditTag('')}
           style={[styles.tagItem, !editTag && styles.tagItemActive]}
         >
-          <Text style={styles.tagItemText}>なし</Text>
+          <Text style={[styles.tagItemText, !editTag && styles.tagItemTextActive]}>なし</Text>
         </TouchableOpacity>
         {tags.filter(t => t.id !== 'all').map(tag => (
           <TouchableOpacity
@@ -145,17 +171,25 @@ export default function SettingsScreen({ route, navigation }: Props) {
             onPress={() => setEditTag(tag.id)}
             style={[styles.tagItem, editTag === tag.id && styles.tagItemActive]}
           >
-            <Text style={styles.tagItemText}>{tag.name}</Text>
+            <Text style={[styles.tagItemText, editTag === tag.id && styles.tagItemTextActive]}>{tag.name}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* ボタン */}
       <View style={styles.actions}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cancelBtn}>
           <Text style={styles.cancelBtnText}>キャンセル</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-          <Text style={styles.saveBtnText}>保存</Text>
+        <TouchableOpacity onPress={handleSave} style={styles.saveBtnTouchable}>
+          <LinearGradient
+            colors={['#E2F0CB', '#B5EAD7']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.saveBtn}
+          >
+            <Text style={styles.saveBtnText}>保存</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -163,35 +197,217 @@ export default function SettingsScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F7F2' },
-  content: { padding: 16, paddingBottom: 30 },
-  title: { fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 12 },
-  emptyText: { textAlign: 'center', marginTop: 40, color: '#9CA3AF' },
-  avatarPreview: { alignItems: 'center', marginBottom: 16 },
-  avatarImage: { width: 88, height: 88, borderRadius: 44 },
-  avatarEmoji: { fontSize: 52 },
-  sectionLabel: { fontSize: 13, fontWeight: '700', color: '#555', marginTop: 12, marginBottom: 6 },
-  avatarOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  avatarOption: { padding: 8, borderRadius: 12, backgroundColor: '#F3F4F6' },
-  avatarOptionActive: { backgroundColor: '#B5EAD7' },
-  avatarOptionText: { fontSize: 20 },
-  imageButtons: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  imagePickBtn: { backgroundColor: '#E2F0CB', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  imagePickText: { fontWeight: '600', color: '#333' },
-  imageRemoveBtn: { backgroundColor: '#FFE5E5', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
-  imageRemoveText: { fontWeight: '600', color: '#cc0000' },
-  input: { backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#ddd' },
-  languageList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  languageItem: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#F3F4F6' },
-  languageItemActive: { backgroundColor: '#B5EAD7' },
-  languageItemText: { fontWeight: '600', color: '#333' },
-  tagList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagItem: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#F3F4F6' },
-  tagItemActive: { backgroundColor: '#B5EAD7' },
-  tagItemText: { fontWeight: '600', color: '#333' },
-  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 18 },
-  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#F3F4F6' },
-  cancelBtnText: { fontWeight: '600', color: '#666' },
-  saveBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: '#B5EAD7' },
-  saveBtnText: { fontWeight: '600', color: '#333' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F9F7F2',
+  },
+  content: {
+    padding: 24,
+    paddingBottom: 40,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 24,
+    textAlign: 'center',
+    fontFamily: 'Quicksand_700Bold',
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 40,
+    color: '#9CA3AF',
+  },
+  // アバタープレビュー
+  avatarPreview: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  avatarEmojiContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  avatarEmoji: {
+    fontSize: 36,
+    fontFamily: 'Quicksand_400Regular',
+  },
+  // セクションラベル
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginTop: 20,
+    marginBottom: 8,
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  // アバターオプション
+  avatarOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  avatarOption: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  avatarOptionActive: {
+    backgroundColor: '#E2F0CB',
+    borderColor: '#B5EAD7',
+  },
+  avatarOptionText: {
+    fontSize: 24,
+    fontFamily: 'Quicksand_400Regular',
+  },
+  // 画像アップロード
+  uploadBtn: {
+    padding: 14,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#E5E5E5',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadBtnText: {
+    fontWeight: '600',
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  removeImageBtn: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  removeImageBtnText: {
+    fontWeight: '600',
+    color: '#EF4444',
+    fontSize: 14,
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  // 名前入力
+  input: {
+    backgroundColor: '#F0F2F5',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    fontFamily: 'Quicksand_500Medium',
+  },
+  // 言語リスト
+  languageList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  languageItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+  },
+  languageItemActive: {
+    backgroundColor: '#E2F0CB',
+    borderWidth: 1,
+    borderColor: '#B5EAD7',
+  },
+  languageItemText: {
+    fontWeight: '600',
+    color: '#333',
+    fontSize: 14,
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  languageItemTextActive: {
+    color: '#333',
+  },
+  // タグリスト
+  tagList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+  },
+  tagItemActive: {
+    backgroundColor: '#E2F0CB',
+    borderWidth: 1,
+    borderColor: '#B5EAD7',
+  },
+  tagItemText: {
+    fontWeight: '600',
+    color: '#333',
+    fontSize: 14,
+    fontFamily: 'Quicksand_600SemiBold',
+  },
+  tagItemTextActive: {
+    color: '#333',
+  },
+  // アクションボタン
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#F0F2F5',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontWeight: '700',
+    color: '#333',
+    fontSize: 16,
+    fontFamily: 'Quicksand_700Bold',
+  },
+  saveBtnTouchable: {
+    flex: 1,
+    borderRadius: 16,
+    shadowColor: 'rgba(181, 234, 215, 0.4)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  saveBtn: {
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    fontWeight: '700',
+    color: '#333',
+    fontSize: 16,
+    fontFamily: 'Quicksand_700Bold',
+  },
 });

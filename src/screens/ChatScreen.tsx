@@ -15,6 +15,7 @@ import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Settings, Mic, Clipboard as ClipboardIcon, Check } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   translateFull,
@@ -779,7 +780,7 @@ export default function ChatScreen({ route, navigation }: Props) {
       setSliderBucket(0);
       prevBucketRef.current = 0;
     } catch {
-      setTranslationError('トーン調整中にエラーが発生しました');
+      setTranslationError('ニュアンス調整中にエラーが発生しました');
     } finally {
       setIsTranslating(false);
     }
@@ -984,9 +985,16 @@ export default function ChatScreen({ route, navigation }: Props) {
               }}
               style={styles.bubbleCopyBtn}
             >
-              <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
-                {copiedMessageId === msg.id ? '✓ コピー済み' : '📋 コピー'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {copiedMessageId === msg.id ? (
+                  <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>✓ コピー済み</Text>
+                ) : (
+                  <>
+                    <ClipboardIcon size={14} color={isSelf ? '#6366f1' : '#9CA3AF'} strokeWidth={2} />
+                    <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>コピー</Text>
+                  </>
+                )}
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1054,17 +1062,27 @@ export default function ChatScreen({ route, navigation }: Props) {
           {partner.avatarImage ? (
             <Image source={{ uri: partner.avatarImage }} style={styles.chatAvatarImage} />
           ) : (
-            <Text style={styles.chatAvatar}>{partner.avatar}</Text>
+            <LinearGradient
+              colors={['#FFDAC1', '#E2F0CB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.chatAvatarContainer}
+            >
+              <Text style={styles.chatAvatar}>{partner.avatar}</Text>
+            </LinearGradient>
           )}
           <Text style={styles.chatPartnerName}>{partner.name}</Text>
           <Text style={styles.chatLanguageBadge}>{partner.language}</Text>
         </View>
         <View style={styles.chatHeaderRight}>
           <TouchableOpacity onPress={() => navigation.navigate('Settings', { partnerId: partner.id })} style={styles.settingsBtn}>
-            <Text style={styles.settingsBtnText}>⚙️</Text>
+            <Settings size={20} color="#333" strokeWidth={2} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('FaceToFace', { partnerId: partner.id })} style={styles.faceToFaceBtn}>
-            <Text style={styles.faceToFaceText}>対面 🎤</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.faceToFaceText}>対面</Text>
+              <Mic size={14} color="#0369A1" strokeWidth={2} />
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -1114,18 +1132,18 @@ export default function ChatScreen({ route, navigation }: Props) {
         <View style={styles.previewContainer}>
           <View style={styles.previewLabelRow}>
             <Text style={styles.previewLabel}>翻訳プレビュー</Text>
-            {preview.noChange && <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>（変化なし）</Text>}
+            {preview.noChange && <Text style={{ color: '#888', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>（変化なし）</Text>}
             {(() => {
               const tb = sliderToToneBucket(sliderBucket);
               const bk = `${tb.tone}_${tb.bucket}`;
               const vs = verificationStatus[bk];
               const lc = getLangCodeFromName('日本語');
               return vs === 'fixing'
-                ? <Text style={{ color: '#e67e22', fontSize: 12, marginLeft: 8 }}>{getFixingText(lc)}</Text>
+                ? <Text style={{ color: '#e67e22', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getFixingText(lc)}</Text>
                 : vs === 'verifying'
-                  ? <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>{getVerifyingText(lc)}</Text>
+                  ? <Text style={{ color: '#888', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getVerifyingText(lc)}</Text>
                   : vs === 'passed'
-                    ? <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 8 }}>{getNaturalnessCheckLabel(lc)}</Text>
+                    ? <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getNaturalnessCheckLabel(lc)}</Text>
                     : null;
             })()}
             {toneLoading && <ActivityIndicator size="small" color="#4A90D9" style={{ marginLeft: 8 }} />}
@@ -1185,12 +1203,15 @@ export default function ChatScreen({ route, navigation }: Props) {
           <View style={styles.btnStack}>
             <TouchableOpacity onPress={handleConvert} disabled={isTranslating || !inputText.trim()} style={(isTranslating || !inputText.trim()) ? styles.btnDisabled : undefined}>
               <LinearGradient colors={['#E2F0CB', '#B5EAD7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.convertBtn}>
-                {isTranslating ? <ActivityIndicator size="small" color="#333" /> : <Text style={styles.convertBtnText}>変換</Text>}
+                {isTranslating ? <ActivityIndicator size="small" color="#333" /> : <Text style={styles.convertBtnText}>翻訳</Text>}
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleSend} disabled={!showPreview} style={!showPreview ? styles.btnDisabled : undefined}>
               <LinearGradient colors={['#d4a5c9', '#b8c4e0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendBtn}>
-                <Text style={styles.sendBtnText}>📋 コピー</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.sendBtnText}>確定</Text>
+                </View>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -1237,7 +1258,7 @@ export default function ChatScreen({ route, navigation }: Props) {
           <View style={styles.toneActionsRow}>
             <TouchableOpacity onPress={handleToneAdjust} disabled={!hasTranslationResult || isTranslating} style={[styles.toneBtnOuter, (!hasTranslationResult || isTranslating) && styles.btnDisabled]}>
               <LinearGradient colors={toneAdjusted && !isCustomActive ? ['#667eea', '#764ba2'] : ['#B5EAD7', '#C7CEEA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.toneBtn, toneAdjusted && !isCustomActive && styles.toneBtnActive]}>
-                <Text style={[styles.toneBtnText, toneAdjusted && !isCustomActive && styles.toneBtnTextActive]}>🎨 トーン調整</Text>
+                <Text style={[styles.toneBtnText, toneAdjusted && !isCustomActive && styles.toneBtnTextActive]}>🎨 ニュアンス調整</Text>
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleCustomToggle} disabled={!hasTranslationResult || isTranslating} style={[styles.toneBtnOuter, (!hasTranslationResult || isTranslating) && styles.btnDisabled]}>
@@ -1298,53 +1319,54 @@ export default function ChatScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F7F2' },
-  chatHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
-  chatHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  backBtn: { padding: 6, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#eee' },
-  backBtnText: { fontSize: 14, color: '#333' },
-  chatAvatar: { fontSize: 20 },
-  chatAvatarImage: { width: 26, height: 26, borderRadius: 13 },
-  chatPartnerName: { fontWeight: '700', color: '#333' },
-  chatLanguageBadge: { backgroundColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11 },
+  chatHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: '#FFFFFF', shadowColor: 'rgba(255, 183, 178, 0.2)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 15, elevation: 4, zIndex: 10 },
+  chatHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  backBtn: { padding: 8, borderRadius: 12 },
+  backBtnText: { fontSize: 14, color: '#333', fontFamily: 'Quicksand_400Regular' },
+  chatAvatarContainer: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  chatAvatar: { fontSize: 24, fontFamily: 'Quicksand_400Regular' },
+  chatAvatarImage: { width: 44, height: 44, borderRadius: 22 },
+  chatPartnerName: { fontSize: 16, fontWeight: '700', color: '#333', fontFamily: 'Quicksand_700Bold' },
+  chatLanguageBadge: { backgroundColor: '#F3F4F6', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, color: '#9CA3AF', fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
   chatHeaderRight: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   settingsBtn: { padding: 6 },
-  settingsBtnText: { fontSize: 18 },
+  settingsBtnText: { fontSize: 18, fontFamily: 'Quicksand_400Regular' },
   faceToFaceBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#E0F2FE' },
-  faceToFaceText: { fontSize: 12, fontWeight: '600', color: '#0369A1' },
+  faceToFaceText: { fontSize: 12, fontWeight: '600', color: '#0369A1', fontFamily: 'Quicksand_600SemiBold' },
   messagesArea: { flex: 1 },
   messagesContent: { padding: 12, paddingBottom: 20 },
   emptyState: { alignItems: 'center', marginTop: 24 },
-  emptyText: { fontSize: 13, color: '#9CA3AF' },
+  emptyText: { fontSize: 13, color: '#9CA3AF', fontFamily: 'Quicksand_400Regular' },
   messageRow: { flexDirection: 'row', marginBottom: 12 },
   messageRowSelf: { justifyContent: 'flex-end' },
   messageRowPartner: { justifyContent: 'flex-start' },
   messageBubble: { maxWidth: '80%', borderRadius: 18, padding: 8, paddingHorizontal: 12 },
-  bubbleSelf: { backgroundColor: '#E3FDFD', borderBottomRightRadius: 6 },
-  bubblePartner: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 6 },
-  messageText: { fontSize: 15, fontWeight: '600', color: '#111827', lineHeight: 21 },
-  messageSubText: { fontSize: 12, color: '#888', fontWeight: '500', marginTop: 2 },
+  bubbleSelf: { backgroundColor: '#E3FDFD', borderBottomRightRadius: 6, shadowColor: '#4A5568', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  bubblePartner: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 6, shadowColor: '#4A5568', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3 },
+  messageText: { fontSize: 15, fontWeight: '600', color: '#111827', lineHeight: 21, fontFamily: 'Quicksand_600SemiBold' },
+  messageSubText: { fontSize: 12, color: '#888', fontWeight: '500', marginTop: 2, fontFamily: 'Quicksand_500Medium' },
   bubbleActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
   bubbleCopyBtn: { paddingVertical: 4, paddingHorizontal: 8 },
-  bubbleCopyText: { fontSize: 12, fontWeight: '600' },
+  bubbleCopyText: { fontSize: 12, fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
   explanationToggle: { paddingVertical: 4, paddingHorizontal: 8 },
-  explanationToggleText: { fontSize: 12, fontWeight: '600' },
+  explanationToggleText: { fontSize: 12, fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
   toggleSelf: { color: '#6366f1' },
   togglePartner: { color: '#9CA3AF' },
   explanationBox: { marginTop: 10, borderRadius: 12, padding: 12 },
   explanationSelf: { backgroundColor: 'rgba(99,102,241,0.1)' },
   explanationPartner: { backgroundColor: '#F3F4F6' },
   explanationPointRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 12, padding: 10, paddingHorizontal: 14, marginBottom: 12 },
-  pointIcon: { fontSize: 14 },
-  pointText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#333', lineHeight: 20 },
+  pointIcon: { fontSize: 14, fontFamily: 'Quicksand_400Regular' },
+  pointText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#333', lineHeight: 20, fontFamily: 'Quicksand_700Bold' },
   pointTextPartner: { color: '#2D5A7B' },
-  explanationDetailText: { fontSize: 14, color: '#444', lineHeight: 24 },
+  explanationDetailText: { fontSize: 14, color: '#444', lineHeight: 24, fontFamily: 'Quicksand_400Regular' },
   nuanceTipBox: { backgroundColor: '#f0f7ff', borderRadius: 8, padding: 10, marginBottom: 6 },
-  grammarTipBox: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 10 },
-  grammarTipLabel: { fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 4 },
-  grammarTipText: { fontSize: 13, color: '#555', lineHeight: 20 },
-  grammarHighlight: { backgroundColor: '#fff3cd', fontWeight: '600', color: '#333' },
+  grammarTipBox: { borderRadius: 12, padding: 14, borderLeftWidth: 3, borderLeftColor: '#7B8EC2' },
+  grammarTipLabel: { fontSize: 11, fontWeight: '700', color: '#fff', marginBottom: 6, backgroundColor: '#7B8EC2', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden', fontFamily: 'Quicksand_700Bold' },
+  grammarTipText: { fontSize: 13, color: '#4A5578', lineHeight: 20, fontFamily: 'Quicksand_400Regular' },
+  grammarHighlight: { backgroundColor: '#fff3cd', fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
-  loadingText: { fontSize: 14, color: '#666' },
+  loadingText: { fontSize: 14, color: '#666', fontFamily: 'Quicksand_400Regular' },
   partnerInputBox: { backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#eee', marginTop: 8 },
   partnerInput: { minHeight: 80, backgroundColor: '#F9F7F2', borderRadius: 8, padding: 10, textAlignVertical: 'top', borderWidth: 1, borderColor: '#eee' },
   partnerInputButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
@@ -1353,32 +1375,32 @@ const styles = StyleSheet.create({
   partnerCancelBtn: { backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   partnerCancelBtnText: { fontWeight: '600', color: '#666' },
   partnerInputTrigger: { padding: 10, alignItems: 'center' },
-  partnerInputTriggerText: { fontSize: 13, color: '#6B7280', fontWeight: '600' },
+  partnerInputTriggerText: { fontSize: 13, color: '#6B7280', fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
   errorBox: { backgroundColor: '#FFE5E5', paddingHorizontal: 14, paddingVertical: 10, marginHorizontal: 16, borderRadius: 10, marginBottom: 6 },
-  errorText: { color: '#CC0000', fontSize: 13 },
+  errorText: { color: '#CC0000', fontSize: 13, fontFamily: 'Quicksand_400Regular' },
   previewContainer: { backgroundColor: '#FFFFFF', padding: 12, borderTopWidth: 2, borderTopColor: '#B5EAD7', maxHeight: 260 },
   previewLabelRow: { flexDirection: 'row', alignItems: 'center' },
-  previewLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  previewTranslation: { color: '#333', fontWeight: '700', fontSize: 16, marginTop: 8, lineHeight: 24 },
-  previewReverse: { fontSize: 13, color: '#9CA3AF', marginTop: 6, fontWeight: '500' },
+  previewLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Quicksand_700Bold' },
+  previewTranslation: { color: '#333', fontWeight: '700', fontSize: 16, marginTop: 8, lineHeight: 24, fontFamily: 'Quicksand_700Bold' },
+  previewReverse: { fontSize: 13, color: '#9CA3AF', marginTop: 6, fontWeight: '500', fontFamily: 'Quicksand_500Medium' },
   toneDiffSection: { marginTop: 8 },
-  inputArea: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', backgroundColor: 'rgba(181,234,215,0.2)' },
+  inputArea: { paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: 'rgba(74, 85, 104, 0.05)', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 1, shadowRadius: 15, elevation: 5, zIndex: 5 },
   inputRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  input: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#333', maxHeight: 100, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+  input: { flex: 1, backgroundColor: '#F0F2F5', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontWeight: '500', color: '#333', maxHeight: 100, fontFamily: 'Quicksand_500Medium' },
   btnStack: { gap: 6, justifyContent: 'center' },
   convertBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center' },
-  convertBtnText: { fontSize: 13, fontWeight: '600', color: '#333' },
+  convertBtnText: { fontSize: 13, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
   sendBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center' },
-  sendBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  sendBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Quicksand_600SemiBold' },
   btnDisabled: { opacity: 0.5 },
   nuanceContainer: { backgroundColor: '#F0F2F5', paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
   sliderContainer: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(200,200,255,0.3)' },
   sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555' },
+  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold' },
   badge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: 'Quicksand_700Bold' },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  sliderEmoji: { fontSize: 20 },
+  sliderEmoji: { fontSize: 20, fontFamily: 'Quicksand_400Regular' },
   sliderTrack: { flex: 1 },
   slider: { width: '100%', height: 26 },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8, marginTop: 10 },
@@ -1387,22 +1409,22 @@ const styles = StyleSheet.create({
   toneBtnOuter: { flex: 1 },
   toneBtn: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
   toneBtnActive: { borderColor: '#667eea' },
-  toneBtnText: { fontSize: 13, fontWeight: '600', color: '#333' },
+  toneBtnText: { fontSize: 13, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
   toneBtnTextActive: { color: '#FFFFFF' },
   customBtn: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
   customBtnActive: { borderColor: '#ec4899' },
-  customBtnText: { fontSize: 13, fontWeight: '600', color: '#db2777' },
+  customBtnText: { fontSize: 13, fontWeight: '600', color: '#db2777', fontFamily: 'Quicksand_600SemiBold' },
   lockBtn: { paddingVertical: 10, paddingHorizontal: 14, backgroundColor: '#FFFFFF', borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
   lockBtnActive: { backgroundColor: '#FFF3CD', borderColor: '#F0A050' },
-  lockBtnText: { fontSize: 18 },
+  lockBtnText: { fontSize: 18, fontFamily: 'Quicksand_400Regular' },
   customContainer: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, gap: 10 },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   presetBtn: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#F3F4F6', borderRadius: 16 },
-  presetBtnText: { fontSize: 13, fontWeight: '600', color: '#333' },
+  presetBtnText: { fontSize: 13, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
   customInputRow: { flexDirection: 'row', gap: 8 },
-  customInput: { flex: 1, backgroundColor: '#F9F7F2', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: '#333', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-  customTranslateBtn: { backgroundColor: '#B5EAD7', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
-  customTranslateBtnText: { fontSize: 13, fontWeight: '600', color: '#333' },
+  customInput: { flex: 1, backgroundColor: '#F9F7F2', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: '#333', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', fontFamily: 'Quicksand_400Regular' },
+  customTranslateBtn: { backgroundColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  customTranslateBtnText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Quicksand_600SemiBold' },
   toast: { position: 'absolute', bottom: 100, left: 40, right: 40, backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 20, alignItems: 'center' },
-  toastText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
+  toastText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
 });

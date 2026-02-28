@@ -16,6 +16,7 @@ import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Clipboard as ClipboardIcon, Check } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { translateFull, translateFullSimple, translatePartialSpacy, extractStructureSpacy, generateExplanation, generateToneDifferenceExplanation, generateMeaningDefinitions, verifyTranslation, fixMeaningIssues, fixNaturalness, getLangCodeFromName } from '../services/groq';
 import { structureToPromptTextSpacy, extractContentWordsForFullGen, extractFlexibleWords, buildMeaningConstraintText } from '../services/prompts';
@@ -282,7 +283,7 @@ const CUSTOM_PRESETS = [
 
 // ═══ メインコンポーネント ═══
 
-export default function TranslateScreen({ route }: Props) {
+export default function TranslateScreen({ route, navigation }: Props) {
   const { mode } = route.params;
   const isPartnerMode = mode === 'receive';
   const isSelfMode = mode === 'send';
@@ -894,7 +895,7 @@ export default function TranslateScreen({ route }: Props) {
   };
 
   // ══════════════════════════════════════════════
-  // トーン調整ボタン
+  // ニュアンス調整ボタン
   // ══════════════════════════════════════════════
 
   const handleToneAdjust = async () => {
@@ -935,7 +936,7 @@ export default function TranslateScreen({ route }: Props) {
       setSliderBucket(0);
       prevBucketRef.current = 0;
     } catch {
-      setError('トーン調整中にエラーが発生しました');
+      setError('ニュアンス調整中にエラーが発生しました');
     } finally {
       setToneLoading(false);
     }
@@ -1173,9 +1174,16 @@ export default function TranslateScreen({ route }: Props) {
               }}
               style={styles.bubbleCopyBtn}
             >
-              <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
-                {copiedMessageId === msg.id ? '✓ コピー済み' : '📋 コピー'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {copiedMessageId === msg.id ? (
+                  <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>✓ コピー済み</Text>
+                ) : (
+                  <>
+                    <ClipboardIcon size={14} color={isSelf ? '#6366f1' : '#9CA3AF'} strokeWidth={2} />
+                    <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>コピー</Text>
+                  </>
+                )}
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1236,28 +1244,30 @@ export default function TranslateScreen({ route }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      {/* ── 言語選択バー ── */}
-      <View style={[styles.langBar, isPartnerMode ? styles.langBarPartner : styles.langBarSelf]}>
-        <TouchableOpacity
-          style={styles.langButton}
-          onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
-        >
-          <Text style={styles.langButtonText}>
-            {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
-          </Text>
-        </TouchableOpacity>
+      {/* ── 言語選択バー（partnerモード時のみ上部表示。selfモードは入力セクション内に統合） ── */}
+      {isPartnerMode && (
+        <View style={[styles.langBar, styles.langBarPartner]}>
+          <TouchableOpacity
+            style={styles.langButton}
+            onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
+          >
+            <Text style={styles.langButtonText}>
+              {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
+            </Text>
+          </TouchableOpacity>
 
-        <Text style={styles.langArrow}>→</Text>
+          <Text style={styles.langArrow}>→</Text>
 
-        <TouchableOpacity
-          style={styles.langButton}
-          onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
-        >
-          <Text style={styles.langButtonText}>
-            {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={styles.langButton}
+            onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
+          >
+            <Text style={styles.langButtonText}>
+              {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── メッセージボード ── */}
       <ScrollView
@@ -1290,18 +1300,18 @@ export default function TranslateScreen({ route }: Props) {
         <View style={styles.previewContainer}>
           <View style={styles.previewLabelRow}>
             <Text style={styles.previewLabel}>翻訳プレビュー</Text>
-            {preview.noChange && <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>（変化なし）</Text>}
+            {preview.noChange && <Text style={{ color: '#888', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>（変化なし）</Text>}
             {(() => {
               const tb = sliderToToneBucket(sliderBucket);
               const bk = `${tb.tone}_${tb.bucket}`;
               const vs = verificationStatus[bk];
               const lc = getLangCodeFromName(detectedLang || '日本語');
               return vs === 'fixing'
-                ? <Text style={{ color: '#e67e22', fontSize: 12, marginLeft: 8 }}>{getFixingText(lc)}</Text>
+                ? <Text style={{ color: '#e67e22', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getFixingText(lc)}</Text>
                 : vs === 'verifying'
-                  ? <Text style={{ color: '#888', fontSize: 12, marginLeft: 8 }}>{getVerifyingText(lc)}</Text>
+                  ? <Text style={{ color: '#888', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getVerifyingText(lc)}</Text>
                   : vs === 'passed'
-                    ? <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 8 }}>{getNaturalnessCheckLabel(lc)}</Text>
+                    ? <Text style={{ color: '#4CAF50', fontSize: 12, marginLeft: 8, fontFamily: 'Quicksand_400Regular' }}>{getNaturalnessCheckLabel(lc)}</Text>
                     : null;
             })()}
             {toneLoading && <ActivityIndicator size="small" color="#4A90D9" style={{ marginLeft: 8 }} />}
@@ -1352,92 +1362,140 @@ export default function TranslateScreen({ route }: Props) {
       )}
 
       {/* ═══ 入力エリア ═══ */}
-      <View style={[styles.inputArea, isPartnerMode ? styles.inputAreaPartner : styles.inputAreaSelf]}>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder={isPartnerMode ? '相手のメッセージを貼り付け...' : 'メッセージを入力...'}
-            placeholderTextColor="#9CA3AF"
-            value={inputText}
-            onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
-            multiline
-            numberOfLines={2}
-          />
+      {isPartnerMode ? (
+        <View style={[styles.inputArea, styles.inputAreaPartner]}>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="相手のメッセージを貼り付け..."
+              placeholderTextColor="#9CA3AF"
+              value={inputText}
+              onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
+              multiline
+              numberOfLines={2}
+            />
+            <View style={styles.btnStack}>
+              <TouchableOpacity style={styles.pasteBtn} onPress={handlePaste}>
+                <Text style={styles.pasteBtnText}>ペースト</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handlePartnerTranslate}
+                disabled={loading || !inputText.trim()}
+                style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
+              >
+                <LinearGradient
+                  colors={['#B5EAD7', '#C7CEEA']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.translateBtn}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#333" />
+                  ) : (
+                    <Text style={styles.translateBtnText}>翻訳</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {detectedLang && sourceLang === '自動認識' && (
+            <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
+          )}
+        </View>
+      ) : (
+        <View style={[styles.inputArea, styles.inputAreaSelf]}>
+          {/* selfモード: 言語セレクター（Web版と同じく入力セクション内） */}
+          <View style={styles.selfLangRow}>
+            <TouchableOpacity
+              style={styles.langButton}
+              onPress={() => { setLangModalTarget('source'); setLangModalVisible(true); }}
+            >
+              <Text style={styles.langButtonText}>
+                {LANGUAGES.find(l => l.name === sourceLang)?.flag} {sourceLang}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.langArrow}>→</Text>
+            <TouchableOpacity
+              style={styles.langButton}
+              onPress={() => { setLangModalTarget('target'); setLangModalVisible(true); }}
+            >
+              <Text style={styles.langButtonText}>
+                {LANGUAGES.find(l => l.name === targetLang)?.flag} {targetLang}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          <View style={styles.btnStack}>
-            {isPartnerMode ? (
-              <>
-                <TouchableOpacity style={styles.pasteBtn} onPress={handlePaste}>
-                  <Text style={styles.pasteBtnText}>ペースト</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handlePartnerTranslate}
-                  disabled={loading || !inputText.trim()}
-                  style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
+          {/* selfモード: 大きいtextarea + 翻訳ボタン + 確定ボタン（Web版と同じ配置） */}
+          <View style={styles.inputRow}>
+            <View style={styles.translateInputWrapper}>
+              <TextInput
+                style={styles.inputInWrapper}
+                placeholder="メッセージを入力..."
+                placeholderTextColor="#9CA3AF"
+                value={inputText}
+                onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
+                multiline
+                numberOfLines={4}
+              />
+              <TouchableOpacity
+                onPress={handleSelfTranslate}
+                disabled={loading || !inputText.trim()}
+                style={[(loading || !inputText.trim()) ? styles.btnDisabled : undefined, { alignSelf: 'flex-end', marginBottom: 4 }]}
+              >
+                <LinearGradient
+                  colors={['#E2F0CB', '#B5EAD7']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.convertBtn}
                 >
-                  <LinearGradient
-                    colors={['#B5EAD7', '#C7CEEA']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.translateBtn}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#333" />
-                    ) : (
-                      <Text style={styles.translateBtnText}>翻訳</Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  onPress={handleSelfTranslate}
-                  disabled={loading || !inputText.trim()}
-                  style={(loading || !inputText.trim()) ? styles.btnDisabled : undefined}
-                >
-                  <LinearGradient
-                    colors={['#E2F0CB', '#B5EAD7']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.convertBtn}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color="#333" />
-                    ) : (
-                      <Text style={styles.convertBtnText}>翻訳</Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleSelfSend}
-                  disabled={!showPreview}
-                  style={!showPreview ? styles.btnDisabled : undefined}
-                >
-                  <LinearGradient
-                    colors={['#d4a5c9', '#b8c4e0']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.sendBtn}
-                  >
-                    <Text style={styles.sendBtnText}>📋 コピー</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#333" />
+                  ) : (
+                    <Text style={styles.convertBtnText}>翻訳</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={handleSelfSend}
+              disabled={!showPreview}
+              style={!showPreview ? styles.btnDisabled : undefined}
+            >
+              <LinearGradient
+                colors={['#d4a5c9', '#b8c4e0']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.sendBtn}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.sendBtnText}>確定</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* selfモード: フッター行（モード切替 + 検出言語） */}
+          <View style={styles.selfFooterRow}>
+            <TouchableOpacity
+              onPress={() => {
+                navigation.replace('Translate', { mode: 'receive' });
+              }}
+              style={styles.modeSwitchBtn}
+            >
+              <Text style={styles.modeSwitchBtnText}>📨 翻訳へ</Text>
+            </TouchableOpacity>
+            {detectedLang && sourceLang === '自動認識' && (
+              <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
             )}
           </View>
         </View>
-
-        {/* 検出言語（入力行の下に表示） */}
-        {detectedLang && sourceLang === '自動認識' && (
-          <Text style={styles.detectedLangText}>検出: {detectedLang}</Text>
-        )}
-      </View>
+      )}
 
       {/* ═══ selfモード: ニュアンス調整エリア（入力の下） ═══ */}
       {isSelfMode && showPreview && (
         <View style={styles.nuanceContainer}>
-          {/* スライダー（トーン調整がアクティブな時のみ） */}
+          {/* スライダー（ニュアンス調整がアクティブな時のみ） */}
           {toneAdjusted && !isCustomActive && (
             <View style={styles.sliderContainer}>
               <View style={styles.sliderHeader}>
@@ -1481,7 +1539,7 @@ export default function TranslateScreen({ route }: Props) {
             </View>
           )}
 
-          {/* トーン調整 / カスタム / ロック ボタン行 */}
+          {/* ニュアンス調整 / カスタム / ロック ボタン行 */}
           <View style={styles.toneActionsRow}>
             <TouchableOpacity
               onPress={handleToneAdjust}
@@ -1495,7 +1553,7 @@ export default function TranslateScreen({ route }: Props) {
                 style={[styles.toneBtn, toneAdjusted && !isCustomActive && styles.toneBtnActive]}
               >
                 <Text style={[styles.toneBtnText, toneAdjusted && !isCustomActive && styles.toneBtnTextActive]}>
-                  🎨 トーン調整
+                  🎨 ニュアンス調整
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -1673,10 +1731,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#333333',
+    fontFamily: 'Quicksand_500Medium',
   },
   langArrow: {
     color: '#9CA3AF',
     fontSize: 14,
+    fontFamily: 'Quicksand_400Regular',
   },
 
   // ── メッセージボード ──
@@ -1700,6 +1760,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
+    fontFamily: 'Quicksand_400Regular',
   },
 
   // ── メッセージ行 ──
@@ -1745,12 +1806,14 @@ const styles = StyleSheet.create({
     color: '#111827',
     lineHeight: 21,
     marginBottom: 2,
+    fontFamily: 'Quicksand_600SemiBold',
   },
   messageSubText: {
     fontSize: 12,
     color: '#888',
     fontWeight: '500',
     marginTop: 2,
+    fontFamily: 'Quicksand_500Medium',
   },
 
   // ── バブルアクション行 ──
@@ -1767,6 +1830,7 @@ const styles = StyleSheet.create({
   bubbleCopyText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 
   // ── 解説 ──
@@ -1777,6 +1841,7 @@ const styles = StyleSheet.create({
   explanationToggleText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   toggleSelf: {
     color: '#6366f1',
@@ -1806,6 +1871,7 @@ const styles = StyleSheet.create({
   },
   pointIcon: {
     fontSize: 14,
+    fontFamily: 'Quicksand_400Regular',
   },
   pointText: {
     flex: 1,
@@ -1813,6 +1879,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333333',
     lineHeight: 20,
+    fontFamily: 'Quicksand_700Bold',
   },
   pointTextPartner: {
     color: '#2D5A7B',
@@ -1821,6 +1888,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#444',
     lineHeight: 24,
+    fontFamily: 'Quicksand_400Regular',
   },
   nuanceTipBox: {
     backgroundColor: '#f0f7ff',
@@ -1829,25 +1897,36 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   grammarTipBox: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: '#f8f9fc',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#7B8EC2',
   },
   grammarTipLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700' as const,
-    color: '#888',
-    marginBottom: 4,
+    color: '#FFFFFF',
+    marginBottom: 6,
+    backgroundColor: '#7B8EC2',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    fontFamily: 'Quicksand_700Bold',
   },
   grammarTipText: {
     fontSize: 13,
-    color: '#555',
+    color: '#4A5578',
     lineHeight: 20,
+    fontFamily: 'Quicksand_400Regular',
   },
   grammarHighlight: {
     backgroundColor: '#fff3cd',
     fontWeight: '600' as const,
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   loadingRow: {
     flexDirection: 'row',
@@ -1859,6 +1938,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: '#666',
+    fontFamily: 'Quicksand_400Regular',
   },
 
   // ── エラー ──
@@ -1877,12 +1957,14 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#CC0000',
     fontSize: 13,
+    fontFamily: 'Quicksand_400Regular',
   },
   errorDismiss: {
     color: '#CC0000',
     fontSize: 16,
     fontWeight: '700',
     paddingLeft: 12,
+    fontFamily: 'Quicksand_700Bold',
   },
 
   // ── プレビュー（selfモード） ──
@@ -1903,6 +1985,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: 'Quicksand_700Bold',
   },
   previewTranslation: {
     color: '#333333',
@@ -1910,12 +1993,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 8,
     lineHeight: 24,
+    fontFamily: 'Quicksand_700Bold',
   },
   previewReverse: {
     fontSize: 13,
     color: '#9CA3AF',
     marginTop: 6,
     fontWeight: '500',
+    fontFamily: 'Quicksand_500Medium',
   },
   toneDiffSection: {
     marginTop: 8,
@@ -1953,6 +2038,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#555',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   badge: {
     paddingHorizontal: 14,
@@ -1963,6 +2049,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: 'Quicksand_700Bold',
   },
   sliderRow: {
     flexDirection: 'row',
@@ -1971,6 +2058,7 @@ const styles = StyleSheet.create({
   },
   sliderEmoji: {
     fontSize: 20,
+    fontFamily: 'Quicksand_400Regular',
   },
   sliderTrack: {
     flex: 1,
@@ -2015,6 +2103,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   toneBtnTextActive: {
     color: '#FFFFFF',
@@ -2034,6 +2123,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#db2777',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   lockBtn: {
     paddingVertical: 10,
@@ -2051,6 +2141,7 @@ const styles = StyleSheet.create({
   },
   lockBtnText: {
     fontSize: 18,
+    fontFamily: 'Quicksand_400Regular',
   },
 
   // ── カスタムトーン ──
@@ -2075,6 +2166,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   customInputRow: {
     flexDirection: 'row',
@@ -2090,19 +2182,21 @@ const styles = StyleSheet.create({
     color: '#333',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
+    fontFamily: 'Quicksand_400Regular',
   },
   customTranslateBtn: {
-    backgroundColor: '#B5EAD7',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   customTranslateBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#FFFFFF',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 
   // ── 入力エリア ──
@@ -2123,6 +2217,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9CA3AF',
     marginTop: 4,
+    fontFamily: 'Quicksand_400Regular',
   },
   inputRow: {
     flexDirection: 'row',
@@ -2140,6 +2235,54 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
+    fontFamily: 'Quicksand_400Regular',
+  },
+  translateInputWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    paddingRight: 4,
+    paddingBottom: 4,
+    minHeight: 100,
+  },
+  inputInWrapper: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#333',
+    maxHeight: 200,
+    minHeight: 80,
+    fontFamily: 'Quicksand_400Regular',
+  },
+  selfLangRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  selfFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  modeSwitchBtn: {
+    backgroundColor: 'rgba(181,234,215,0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  modeSwitchBtnText: {
+    fontSize: 12,
+    color: '#555',
+    fontWeight: '500',
+    fontFamily: 'Quicksand_500Medium',
   },
   btnStack: {
     gap: 6,
@@ -2158,6 +2301,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   translateBtn: {
     paddingVertical: 10,
@@ -2169,6 +2313,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 
   // self ボタン
@@ -2182,6 +2327,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#333',
+    fontFamily: 'Quicksand_600SemiBold',
   },
   sendBtn: {
     paddingVertical: 10,
@@ -2193,6 +2339,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 
   btnDisabled: {
@@ -2215,6 +2362,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 
   // ── モーダル ──
@@ -2237,6 +2385,7 @@ const styles = StyleSheet.create({
     color: '#333333',
     textAlign: 'center',
     marginBottom: 16,
+    fontFamily: 'Quicksand_700Bold',
   },
   modalItem: {
     flexDirection: 'row',
@@ -2251,11 +2400,13 @@ const styles = StyleSheet.create({
   modalItemText: {
     fontSize: 15,
     color: '#333333',
+    fontFamily: 'Quicksand_400Regular',
   },
   modalCheck: {
     fontSize: 16,
     color: '#6366f1',
     fontWeight: '700',
+    fontFamily: 'Quicksand_700Bold',
   },
   modalClose: {
     marginTop: 12,
@@ -2267,5 +2418,6 @@ const styles = StyleSheet.create({
   modalCloseText: {
     fontSize: 15,
     color: '#9CA3AF',
+    fontFamily: 'Quicksand_400Regular',
   },
 });

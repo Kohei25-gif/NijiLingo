@@ -1,4 +1,6 @@
 import { Alert, StyleSheet, Text, View, TouchableOpacity, SafeAreaView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MessageCircle, Mic, Settings } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppData } from '../context/AppDataContext';
 
@@ -28,46 +30,71 @@ export default function HomeScreen({ navigation }: Props) {
         {/* メインボタン */}
         <View style={styles.mainButtons}>
           <TouchableOpacity
-            style={[styles.mainButton, styles.partnerButton]}
             onPress={() => navigation.navigate('Translate', { mode: 'receive' })}
             activeOpacity={0.8}
+            style={styles.mainButtonTouchable}
           >
-            <Text style={styles.mainButtonIcon}>📨</Text>
-            <Text style={styles.mainButtonLabel}>相手のメッセージを{'\n'}翻訳</Text>
+            <LinearGradient
+              colors={['rgba(255, 219, 193, 0.5)', 'rgba(255, 219, 193, 0.3)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.mainButton}
+            >
+              <Text style={styles.mainButtonIcon}>📨</Text>
+              <Text style={styles.mainButtonLabel}>相手のメッセージを翻訳</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.mainButton, styles.selfButton]}
             onPress={() => navigation.navigate('Translate', { mode: 'send' })}
             activeOpacity={0.8}
+            style={styles.mainButtonTouchable}
           >
-            <Text style={styles.mainButtonIcon}>✍️</Text>
-            <Text style={styles.mainButtonLabel}>自分の文章を{'\n'}送る</Text>
+            <LinearGradient
+              colors={['rgba(181, 234, 215, 0.5)', 'rgba(181, 234, 215, 0.3)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.mainButton}
+            >
+              <Text style={styles.mainButtonIcon}>✍️</Text>
+              <Text style={styles.mainButtonLabel}>自分の文章を送る</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* サブボタン */}
         <View style={styles.subButtons}>
           <TouchableOpacity
-            style={styles.subButton}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('List')}
           >
-            <Text style={styles.subButtonIcon}>💬</Text>
-            <Text style={styles.subButtonText}>トークルーム</Text>
+            <LinearGradient
+              colors={['#B5EAD7', '#C7CEEA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.subButton}
+            >
+              <MessageCircle size={14} color="#333" strokeWidth={2} />
+              <Text style={styles.subButtonText}>トークルーム</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.subButton}
             activeOpacity={0.7}
             onPress={() => navigation.navigate('FaceToFace', { partnerId: currentPartnerId ?? undefined })}
           >
-            <Text style={styles.subButtonIcon}>🎤</Text>
-            <Text style={styles.subButtonText}>対面モード</Text>
+            <LinearGradient
+              colors={['#B5EAD7', '#C7CEEA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.subButton}
+            >
+              <Mic size={14} color="#333" strokeWidth={2} />
+              <Text style={styles.subButtonText}>対面モード</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.subButton}
             activeOpacity={0.7}
             onPress={() => {
               if (!currentPartnerId) {
@@ -77,8 +104,15 @@ export default function HomeScreen({ navigation }: Props) {
               navigation.navigate('Settings', { partnerId: currentPartnerId });
             }}
           >
-            <Text style={styles.subButtonIcon}>⚙️</Text>
-            <Text style={styles.subButtonText}>設定</Text>
+            <LinearGradient
+              colors={['#B5EAD7', '#C7CEEA']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.subButton}
+            >
+              <Settings size={14} color="#333" strokeWidth={2} />
+              <Text style={styles.subButtonText}>設定</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -107,54 +141,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333333',
     letterSpacing: -0.5,
+    fontFamily: 'Quicksand_700Bold',
   },
   titleDot: {
     fontSize: 32,
     fontWeight: '700',
     color: '#B5EAD7',
+    fontFamily: 'Quicksand_700Bold',
   },
   mainButtons: {
     gap: 16,
     marginBottom: 40,
+    paddingHorizontal: 0,
+  },
+  mainButtonTouchable: {
+    borderRadius: 16,
+    // shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    // shadow for Android
+    elevation: 2,
   },
   mainButton: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 24,
     borderRadius: 16,
-    gap: 12,
-  },
-  partnerButton: {
-    backgroundColor: '#FFB7B2',
-  },
-  selfButton: {
-    backgroundColor: '#B5EAD7',
+    gap: 16,
   },
   mainButtonIcon: {
-    fontSize: 40,
+    fontSize: 26,
+    fontFamily: 'Quicksand_400Regular',
   },
   mainButtonLabel: {
     color: '#333333',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    textAlign: 'center',
     lineHeight: 24,
+    flex: 1,
+    fontFamily: 'Quicksand_600SemiBold',
   },
   subButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
   },
   subButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 4,
   },
   subButtonIcon: {
-    fontSize: 28,
+    fontSize: 14,
+    fontFamily: 'Quicksand_400Regular',
   },
   subButtonText: {
     fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    color: '#333',
+    fontWeight: '600',
+    fontFamily: 'Quicksand_600SemiBold',
   },
 });
