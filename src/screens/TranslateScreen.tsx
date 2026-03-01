@@ -403,6 +403,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
   }>>({});
   const translationCacheRef = useRef<Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>>({});
 
+  // ── 解説キャッシュ（同じトーンで再度開いた時にAPI呼び出しを省略） ──
+  const explanationCacheRef = useRef<Record<string, { point: string; explanation: string }>>({});
+
   // ── Refs ──
   const prevBucketRef = useRef(0);
 
@@ -1047,6 +1050,16 @@ export default function TranslateScreen({ route, navigation }: Props) {
     const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
     const effectiveTargetLang = targetLang;
 
+    // 解説キャッシュキー
+    const explCacheKey = `${previewSourceText}__${sliderBucket}`;
+
+    // キャッシュにあればAPI呼び出しせずに表示
+    if (explanationCacheRef.current[explCacheKey]) {
+      setToneDiffExplanation(explanationCacheRef.current[explCacheKey]);
+      setToneDiffExpanded(true);
+      return;
+    }
+
     // ベース(0)の場合は「この文の伝わり方」を解説
     if (sliderBucket === 0) {
       if (!preview.translation) {
@@ -1060,7 +1073,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
       const targetLangCode0 = getLangCodeFromName(effectiveTargetLang);
       try {
         const explanation = await generateExplanation(preview.translation, sourceLangCode0, targetLangCode0, sourceLangCode0);
-        setToneDiffExplanation({ point: explanation.point || getDifferenceFromText(sourceLangCode0, 0), explanation: explanation.explanation });
+        const result = { point: explanation.point || getDifferenceFromText(sourceLangCode0, 0), explanation: explanation.explanation };
+        explanationCacheRef.current[explCacheKey] = result;
+        setToneDiffExplanation(result);
       } catch {
         setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode0, 0), explanation: getFailedToGenerateText(sourceLangCode0) });
       } finally {
@@ -1099,6 +1114,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
       const explanation = await generateToneDifferenceExplanation(
         prevCached.translation, currCached.translation, prevUiBucket, currentInternalBucket, currentTone, sourceLangCode, keywords ?? undefined
       );
+      explanationCacheRef.current[explCacheKey] = explanation;
       setToneDiffExplanation(explanation);
     } catch {
       setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getFailedToGenerateText(sourceLangCode) });
