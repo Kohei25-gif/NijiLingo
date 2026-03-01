@@ -1719,16 +1719,17 @@ export default function TranslateScreen({ route, navigation }: Props) {
           {/* スライダー（ニュアンス調整がアクティブな時のみ） */}
           {toneAdjusted && !isCustomActive && (
             <View style={styles.sliderContainer}>
-              <Text style={styles.sliderTitle}>ニュアンス調整</Text>
+              <View style={styles.sliderHeader}>
+                <Text style={styles.sliderTitle}>ニュアンス調整</Text>
+                <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
+                  <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
+                </View>
+                <View style={{ flex: 1 }} />
+              </View>
 
               <View style={styles.sliderRow}>
                 <Text style={styles.sliderEmoji}>😎</Text>
                 <View style={styles.sliderTrack}>
-                  <View style={[styles.badgeFloating, { left: `${(sliderValue + 100) / 200 * 100}%` }]}>
-                    <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
-                      <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
-                    </View>
-                  </View>
                   <Slider
                     style={styles.slider}
                     minimumValue={-100}
@@ -2300,20 +2301,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(200,200,255,0.3)',
   },
+  sliderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
   sliderTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#555',
     fontFamily: 'Quicksand_600SemiBold',
-    marginBottom: 8,
-  },
-  badgeFloating: {
-    position: 'absolute',
-    top: -28,
-    zIndex: 10,
-    width: 0,
-    overflow: 'visible',
-    alignItems: 'center',
+    marginRight: 8,
   },
   badge: {
     paddingHorizontal: 14,
@@ -2337,8 +2335,6 @@ const styles = StyleSheet.create({
   },
   sliderTrack: {
     flex: 1,
-    overflow: 'visible',
-    paddingTop: 32,
   },
   slider: {
     width: '100%',

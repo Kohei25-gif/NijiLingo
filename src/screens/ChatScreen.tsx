@@ -1229,15 +1229,16 @@ export default function ChatScreen({ route, navigation }: Props) {
         <View style={styles.nuanceContainer}>
           {toneAdjusted && !isCustomActive && (
             <View style={styles.sliderContainer}>
-              <Text style={styles.sliderTitle}>ニュアンス調整</Text>
+              <View style={styles.sliderHeader}>
+                <Text style={styles.sliderTitle}>ニュアンス調整</Text>
+                <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
+                  <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
+                </View>
+                <View style={{ flex: 1 }} />
+              </View>
               <View style={styles.sliderRow}>
                 <Text style={styles.sliderEmoji}>😎</Text>
                 <View style={styles.sliderTrack}>
-                  <View style={[styles.badgeFloating, { left: `${(sliderValue + 100) / 200 * 100}%` }]}>
-                    <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
-                      <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
-                    </View>
-                  </View>
                   <Slider
                     style={styles.slider}
                     minimumValue={-100}
@@ -1404,13 +1405,13 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
   nuanceContainer: { backgroundColor: '#F0F2F5', paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
   sliderContainer: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(200,200,255,0.3)' },
-  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold', marginBottom: 8 },
-  badgeFloating: { position: 'absolute', top: -28, zIndex: 10, width: 0, overflow: 'visible', alignItems: 'center' },
+  sliderHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold', marginRight: 8 },
   badge: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: 'Quicksand_700Bold' },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   sliderEmoji: { fontSize: 20, fontFamily: 'Quicksand_400Regular' },
-  sliderTrack: { flex: 1, overflow: 'visible', paddingTop: 32 },
+  sliderTrack: { flex: 1 },
   slider: { width: '100%', height: 26 },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8, marginTop: 10 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ddd' },
