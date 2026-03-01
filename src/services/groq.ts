@@ -238,7 +238,12 @@ export async function generateToneDifferenceExplanation(
   let userPrompt: string;
 
   if (sourceLang === 'ja') {
-    const part1Instruction = 'パート1: 変化の中で相手への伝わり方に一番影響する箇所を1つだけ選び、「」で囲んで、どう変わったかを1〜2文でやさしく説明する。複数の変化があっても1つに絞ること。';
+    const toneDirectionJa = currentLevel < 0
+      ? 'よりカジュアル・くだけた'
+      : currentLevel > 0
+      ? 'よりフォーマル・丁寧な'
+      : '変化した';
+    const part1Instruction = `パート1: 前の段階からの変化のうち、${toneDirectionJa}表現を1つだけ抜き出し、「」で囲んで、1〜2文でやさしく解説する。文全体を引用せず、変わった表現だけを短く抜き出すこと。`;
     const part2Instruction = `パート2: この文に出てくる表現を1〜2個選んで「表現」→ その表現だけの説明、の形式で書く。2個書くときは改行で区切ること。
 ※ 他の表現と比べない。「〜と比べて」「〜よりも」は禁止。その表現単体の意味・使い方だけを書くこと。
 ※ 文の内容をよく読み、この文の中でどう使われているかに合わせて説明すること。
@@ -273,7 +278,12 @@ ${changedKeywords ? `\n変化したキーワード: ${changedKeywords.prev} → 
 ${directionJa}
 ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
-    const part1InstructionEn = 'Part 1: Pick the 1 change that most affects how the message comes across to the listener. Wrap it in 「」 and explain in 1-2 sentences. Even if there are multiple changes, focus on just one.';
+    const toneDirectionEn = currentLevel < 0
+      ? 'more casual/informal'
+      : currentLevel > 0
+      ? 'more formal/polite'
+      : 'changed';
+    const part1InstructionEn = `Part 1: From the change, pick 1 expression that became ${toneDirectionEn}. Wrap it in 「」 and explain in 1-2 sentences. Do NOT quote the entire sentence — extract only the short expression that changed.`;
     const part2InstructionEn = `Part 2: Pick 1-2 expressions from this sentence and explain each in the format below. If writing 2, put each on a separate line.
 Do NOT compare expressions. No "compared to ~" or "unlike ~". Explain each expression on its own.
 Read the sentence carefully and explain how the expression is used in this specific context.
