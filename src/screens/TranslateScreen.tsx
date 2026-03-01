@@ -76,11 +76,11 @@ function getSliderBucket(value: number): number {
 
 function getBadgeText(bucket: number): string {
   switch (bucket) {
-    case -100: return 'もっとカジュアル 😎😎';
-    case -50: return 'カジュアル 😎';
+    case -100: return 'もっとカジュアル';
+    case -50: return 'カジュアル';
     case 0: return 'ベース';
-    case 50: return 'ていねい 🎩';
-    case 100: return 'もっとていねい 🎩🎩';
+    case 50: return 'ていねい';
+    case 100: return 'もっとていねい';
     default: return 'ベース';
   }
 }
