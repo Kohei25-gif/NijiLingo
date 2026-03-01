@@ -81,6 +81,12 @@ export type TranslateDraft = {
   explanationCache: Record<string, { point: string; explanation: string }>;
 };
 
+// ChatScreen用キャッシュ（パートナーごと）
+export type ChatCache = {
+  translationCache: Record<string, TranslationCacheEntry>;
+  explanationCache: Record<string, { point: string; explanation: string }>;
+};
+
 type AppDataContextValue = {
   partners: Partner[];
   tags: Tag[];
@@ -89,6 +95,9 @@ type AppDataContextValue = {
   isLoaded: boolean;
   translateDraft: TranslateDraft;
   setTranslateDraft: (patch: Partial<TranslateDraft> | ((prev: TranslateDraft) => Partial<TranslateDraft>)) => void;
+  chatCaches: Record<number, ChatCache>;
+  setChatCache: (partnerId: number, patch: Partial<ChatCache>) => void;
+  clearChatCache: (partnerId: number) => void;
   setSelectedTag: (id: string) => void;
   setCurrentPartnerId: (id: number | null) => void;
   addPartner: (partner: Omit<Partner, 'id' | 'lastMessage' | 'lastTime'> & { id?: number; lastMessage?: string; lastTime?: string }) => Partner;
@@ -132,6 +141,25 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setTranslateDraftRaw(prev => {
       const resolved = typeof patch === 'function' ? patch(prev) : patch;
       return { ...prev, ...resolved };
+    });
+  };
+
+  // ChatScreen用キャッシュ（パートナーIDごと）
+  const [chatCaches, setChatCachesRaw] = useState<Record<number, ChatCache>>({});
+  const setChatCache = (partnerId: number, patch: Partial<ChatCache>) => {
+    setChatCachesRaw(prev => ({
+      ...prev,
+      [partnerId]: {
+        translationCache: { ...(prev[partnerId]?.translationCache || {}), ...(patch.translationCache || {}) },
+        explanationCache: { ...(prev[partnerId]?.explanationCache || {}), ...(patch.explanationCache || {}) },
+      },
+    }));
+  };
+  const clearChatCache = (partnerId: number) => {
+    setChatCachesRaw(prev => {
+      const next = { ...prev };
+      delete next[partnerId];
+      return next;
     });
   };
 
@@ -237,6 +265,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     isLoaded,
     translateDraft,
     setTranslateDraft,
+    chatCaches,
+    setChatCache,
+    clearChatCache,
     setSelectedTag,
     setCurrentPartnerId,
     addPartner,
@@ -248,7 +279,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     addTag,
     editTag,
     deleteTag,
-  }), [partners, tags, selectedTag, currentPartnerId, isLoaded, translateDraft]);
+  }), [partners, tags, selectedTag, currentPartnerId, isLoaded, translateDraft, chatCaches]);
 
   return (
     <AppDataContext.Provider value={value}>

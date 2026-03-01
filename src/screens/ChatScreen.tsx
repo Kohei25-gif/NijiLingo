@@ -172,7 +172,7 @@ const CUSTOM_PRESETS = [
 ];
 
 export default function ChatScreen({ route, navigation }: Props) {
-  const { partners, updatePartner, setCurrentPartnerId } = useAppData();
+  const { partners, updatePartner, setCurrentPartnerId, chatCaches, setChatCache, clearChatCache } = useAppData();
   const partnersRef = useRef(partners);
   useEffect(() => { partnersRef.current = partners; }, [partners]);
 
@@ -198,9 +198,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     setShowPreview(false);
     setPreview({ translation: '', reverseTranslation: '', explanation: null });
     setTranslationError(null);
-    // キャッシュクリア（前のパートナーのキャッシュが残らないように）
-    translationCacheRef.current = {};
-    setTranslationCacheState({});
+    // キャッシュクリア（パートナー切替時は不要 — Context管理でパートナーごとに分離済み）
     setCustomTone('');
     setPartnerInputText('');
     setShowPartnerInput(false);
@@ -255,15 +253,18 @@ export default function ChatScreen({ route, navigation }: Props) {
   // ── 検証API状態 ──
   const [verificationStatus, setVerificationStatus] = useState<Record<string, 'verifying' | 'fixing' | 'passed' | null>>({});
 
-  // ── キャッシュ ──
-  const [translationCache, setTranslationCacheState] = useState<Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>>({});
-  const translationCacheRef = useRef<Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>>({});
+  // ── キャッシュ（Context永続化） ──
+  const partnerId = route.params.partnerId;
+  const chatCache = chatCaches[partnerId] || { translationCache: {}, explanationCache: {} };
+  const translationCacheRef = useRef(chatCache.translationCache);
+  translationCacheRef.current = chatCache.translationCache;
+  const [translationCacheVersion, setTranslationCacheVersion] = useState(0);
 
   const prevBucketRef = useRef(0);
 
   const updateTranslationCache = (updates: Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>) => {
-    Object.assign(translationCacheRef.current, updates);
-    setTranslationCacheState(prev => ({ ...prev, ...updates }));
+    setChatCache(partnerId, { translationCache: { ...chatCache.translationCache, ...updates } });
+    setTranslationCacheVersion(v => v + 1);
   };
 
   const copyToClipboard = async (text: string) => {
@@ -293,7 +294,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (!cached) return;
     if (cached.translation === preview.translation && cached.reverseTranslation === preview.reverseTranslation && cached.noChange === preview.noChange) return;
     setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation, noChange: cached.noChange }));
-  }, [sliderBucket, isCustomActive, previewSourceText, translationCache, partner, preview]);
+  }, [sliderBucket, isCustomActive, previewSourceText, translationCacheVersion, partner, preview]);
 
   useEffect(() => {
     setToneDiffExplanation(null);
@@ -815,6 +816,17 @@ export default function ChatScreen({ route, navigation }: Props) {
     const sourceLang = '日本語';
     const targetLang = partner.language;
 
+    // 解説キャッシュキー
+    const explCacheKey = `${previewSourceText}__${sliderBucket}`;
+    const explanationCache = chatCache.explanationCache;
+
+    // キャッシュにあればAPI呼び出しせずに表示
+    if (explanationCache[explCacheKey]) {
+      setToneDiffExplanation(explanationCache[explCacheKey]);
+      setToneDiffExpanded(true);
+      return;
+    }
+
     if (sliderBucket === 0) {
       if (!preview.translation) {
         setToneDiffExplanation({ point: 'この文の伝わり方', explanation: '翻訳がまだ生成されていません。' });
@@ -825,7 +837,9 @@ export default function ChatScreen({ route, navigation }: Props) {
       setToneDiffExpanded(true);
       try {
         const explanation = await generateExplanation(preview.translation, getLangCodeFromName(sourceLang), getLangCodeFromName(targetLang), getLangCodeFromName(sourceLang));
-        setToneDiffExplanation({ point: explanation.point || getDifferenceFromText(getLangCodeFromName(sourceLang), 0), explanation: explanation.explanation });
+        const result = { point: explanation.point || getDifferenceFromText(getLangCodeFromName(sourceLang), 0), explanation: explanation.explanation };
+        setChatCache(partnerId, { explanationCache: { ...explanationCache, [explCacheKey]: result } });
+        setToneDiffExplanation(result);
       } catch {
         setToneDiffExplanation({ point: getDifferenceFromText(getLangCodeFromName(sourceLang), 0), explanation: getFailedToGenerateText(getLangCodeFromName(sourceLang)) });
       } finally {
@@ -869,6 +883,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         sourceLangCode,
         keywords ?? undefined
       );
+      setChatCache(partnerId, { explanationCache: { ...chatCache.explanationCache, [explCacheKey]: explanation } });
       setToneDiffExplanation(explanation);
     } catch {
       setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getFailedToGenerateText(sourceLangCode) });
