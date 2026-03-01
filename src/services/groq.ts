@@ -222,6 +222,18 @@ export async function generateToneDifferenceExplanation(
   const prevLabel = getLevelLabel(previousLevel);
   const currLabel = getLevelLabel(currentLevel);
 
+  // トーン方向の明示的な指示を生成
+  const directionJa = currentLevel < 0
+    ? '※ これはよりカジュアル・くだけた方向への変化です。よりカジュアルになった表現を抜き出して解説してください。「丁寧」「フォーマル」方向の説明は誤りです。'
+    : currentLevel > 0
+    ? '※ これはよりフォーマル・丁寧な方向への変化です。より丁寧・ビジネス的になった表現を抜き出して解説してください。「カジュアル」「くだけた」方向の説明は誤りです。'
+    : '';
+  const directionEn = currentLevel < 0
+    ? '※ This is a change toward MORE CASUAL/informal expression. Highlight expressions that became more casual. Do NOT describe this as becoming more polite or formal.'
+    : currentLevel > 0
+    ? '※ This is a change toward MORE FORMAL/polite expression. Highlight expressions that became more formal. Do NOT describe this as becoming more casual.'
+    : '';
+
   let systemPrompt: string;
   let userPrompt: string;
 
@@ -258,6 +270,7 @@ ${part2Instruction}
     userPrompt = `${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
 ${changedKeywords ? `\n変化したキーワード: ${changedKeywords.prev} → ${changedKeywords.curr}\nこのキーワードに合わせて解説してください。` : ''}
+${directionJa}
 ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = 'Part 1: Pick the 1 change that most affects how the message comes across to the listener. Wrap it in 「」 and explain in 1-2 sentences. Even if there are multiple changes, focus on just one.';
@@ -293,6 +306,7 @@ ${part2InstructionEn}
     userPrompt = `${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
 ${changedKeywords ? `\nChanged keywords: ${changedKeywords.prev} → ${changedKeywords.curr}\nFocus your explanation on these keywords.` : ''}
+${directionEn}
 Explain the change from ${prevLabel} to ${currLabel} in ${langName}.`;
   }
 
