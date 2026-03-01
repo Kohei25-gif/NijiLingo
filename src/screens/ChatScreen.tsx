@@ -15,7 +15,7 @@ import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Settings, Mic, Clipboard as ClipboardIcon, Check } from 'lucide-react-native';
+import { Settings, Mic, Copy, Check } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   translateFull,
@@ -978,27 +978,6 @@ export default function ChatScreen({ route, navigation }: Props) {
           <View style={styles.bubbleActionsRow}>
             <TouchableOpacity
               onPress={() => {
-                const textToCopy = isSelf ? msg.translation : msg.original;
-                copyToClipboard(textToCopy);
-                setCopiedMessageId(msg.id);
-                setTimeout(() => setCopiedMessageId(null), 2000);
-              }}
-              style={styles.bubbleCopyBtn}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {copiedMessageId === msg.id ? (
-                  <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>✓ コピー済み</Text>
-                ) : (
-                  <>
-                    <ClipboardIcon size={14} color={isSelf ? '#6366f1' : '#9CA3AF'} strokeWidth={2} />
-                    <Text style={[styles.bubbleCopyText, isSelf ? styles.toggleSelf : styles.togglePartner]}>コピー</Text>
-                  </>
-                )}
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
                 setExpandedId(isExpanded ? null : msg.id);
                 if (!isExpanded) {
                   setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
@@ -1009,6 +988,22 @@ export default function ChatScreen({ route, navigation }: Props) {
               <Text style={[styles.explanationToggleText, isSelf ? styles.toggleSelf : styles.togglePartner]}>
                 {isExpanded ? '▲ 解説を閉じる' : '▼ 解説'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                const textToCopy = isSelf ? msg.translation : msg.original;
+                copyToClipboard(textToCopy);
+                setCopiedMessageId(msg.id);
+                setTimeout(() => setCopiedMessageId(null), 2000);
+              }}
+              style={styles.bubbleCopyBtn}
+            >
+              {copiedMessageId === msg.id ? (
+                <Check size={14} color={isSelf ? '#6366f1' : '#9CA3AF'} strokeWidth={2.5} />
+              ) : (
+                <Copy size={14} color={isSelf ? '#6366f1' : '#9CA3AF'} strokeWidth={2.5} />
+              )}
             </TouchableOpacity>
           </View>
 
@@ -1191,30 +1186,42 @@ export default function ChatScreen({ route, navigation }: Props) {
 
       <View style={styles.inputArea}>
         <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="メッセージを入力..."
-            placeholderTextColor="#9CA3AF"
-            value={inputText}
-            onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
-            multiline
-            numberOfLines={2}
-          />
-          <View style={styles.btnStack}>
-            <TouchableOpacity onPress={handleConvert} disabled={isTranslating || !inputText.trim()} style={(isTranslating || !inputText.trim()) ? styles.btnDisabled : undefined}>
+          <View style={styles.translateInputWrapper}>
+            <TextInput
+              style={styles.inputInWrapper}
+              placeholder="メッセージを入力..."
+              placeholderTextColor="#9CA3AF"
+              value={inputText}
+              onChangeText={(text) => { setInputText(text); setShowPreview(false); }}
+              multiline
+              textAlignVertical="top"
+            />
+            <TouchableOpacity
+              onPress={handleConvert}
+              disabled={isTranslating || !inputText.trim()}
+              style={[(isTranslating || !inputText.trim()) ? styles.btnDisabled : undefined, { alignSelf: 'flex-end', marginBottom: 4 }]}
+            >
               <LinearGradient colors={['#E2F0CB', '#B5EAD7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.convertBtn}>
                 {isTranslating ? <ActivityIndicator size="small" color="#333" /> : <Text style={styles.convertBtnText}>翻訳</Text>}
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleSend} disabled={!showPreview} style={!showPreview ? styles.btnDisabled : undefined}>
-              <LinearGradient colors={['#d4a5c9', '#b8c4e0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendBtn}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
-                  <Text style={styles.sendBtnText}>確定</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={handleSend} disabled={!showPreview} style={!showPreview ? styles.btnDisabled : undefined}>
+            <LinearGradient colors={['#d4a5c9', '#b8c4e0']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendBtn}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Copy size={14} color="#FFFFFF" strokeWidth={2.5} />
+                <Text style={styles.sendBtnText}>確定</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.inputFooterRow}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Home' as never)}
+            style={styles.modeSwitchBtn}
+          >
+            <Text style={styles.modeSwitchBtnText}>🏠 ホームへ</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -1222,15 +1229,15 @@ export default function ChatScreen({ route, navigation }: Props) {
         <View style={styles.nuanceContainer}>
           {toneAdjusted && !isCustomActive && (
             <View style={styles.sliderContainer}>
-              <View style={styles.sliderHeader}>
-                <Text style={styles.sliderTitle}>ニュアンス調整</Text>
-                <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
-                  <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
-                </View>
-              </View>
+              <Text style={styles.sliderTitle}>ニュアンス調整</Text>
               <View style={styles.sliderRow}>
                 <Text style={styles.sliderEmoji}>😎</Text>
                 <View style={styles.sliderTrack}>
+                  <View style={[styles.badgeFloating, { left: `${(sliderValue + 100) / 200 * 100}%` }]}>
+                    <View style={[styles.badge, { backgroundColor: getBadgeColor(sliderBucket) }]}>
+                      <Text style={styles.badgeText}>{getBadgeText(sliderBucket)}</Text>
+                    </View>
+                  </View>
                   <Slider
                     style={styles.slider}
                     minimumValue={-100}
@@ -1346,8 +1353,7 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 15, fontWeight: '600', color: '#111827', lineHeight: 21, fontFamily: 'Quicksand_600SemiBold' },
   messageSubText: { fontSize: 12, color: '#888', fontWeight: '500', marginTop: 2, fontFamily: 'Quicksand_500Medium' },
   bubbleActionsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  bubbleCopyBtn: { paddingVertical: 4, paddingHorizontal: 8 },
-  bubbleCopyText: { fontSize: 12, fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
+  bubbleCopyBtn: { padding: 4, borderRadius: 6, opacity: 0.6 },
   explanationToggle: { paddingVertical: 4, paddingHorizontal: 8 },
   explanationToggleText: { fontSize: 12, fontWeight: '600', fontFamily: 'Quicksand_600SemiBold' },
   toggleSelf: { color: '#6366f1' },
@@ -1364,7 +1370,7 @@ const styles = StyleSheet.create({
   grammarTipBox: { borderRadius: 12, padding: 14, borderLeftWidth: 3, borderLeftColor: '#7B8EC2' },
   grammarTipLabel: { fontSize: 11, fontWeight: '700', color: '#fff', marginBottom: 6, backgroundColor: '#7B8EC2', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden', fontFamily: 'Quicksand_700Bold' },
   grammarTipText: { fontSize: 13, color: '#4A5578', lineHeight: 20, fontFamily: 'Quicksand_400Regular' },
-  grammarHighlight: { backgroundColor: '#fff3cd', fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
+  grammarHighlight: { backgroundColor: 'rgba(255, 200, 87, 0.35)', fontWeight: '600', color: '#3D4F7C', fontFamily: 'Quicksand_600SemiBold' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
   loadingText: { fontSize: 14, color: '#666', fontFamily: 'Quicksand_400Regular' },
   partnerInputBox: { backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#eee', marginTop: 8 },
@@ -1384,29 +1390,32 @@ const styles = StyleSheet.create({
   previewTranslation: { color: '#333', fontWeight: '700', fontSize: 16, marginTop: 8, lineHeight: 24, fontFamily: 'Quicksand_700Bold' },
   previewReverse: { fontSize: 13, color: '#9CA3AF', marginTop: 6, fontWeight: '500', fontFamily: 'Quicksand_500Medium' },
   toneDiffSection: { marginTop: 8 },
-  inputArea: { paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: 'rgba(74, 85, 104, 0.05)', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 1, shadowRadius: 15, elevation: 5, zIndex: 5 },
+  inputArea: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', backgroundColor: 'rgba(181,234,215,0.2)' },
+  inputFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  modeSwitchBtn: { paddingVertical: 5, paddingHorizontal: 12, backgroundColor: '#f0f4ff', borderRadius: 6 },
+  modeSwitchBtnText: { fontSize: 12, fontWeight: '600', color: '#5b6abf', fontFamily: 'Quicksand_600SemiBold' },
   inputRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
-  input: { flex: 1, backgroundColor: '#F0F2F5', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, fontWeight: '500', color: '#333', maxHeight: 100, fontFamily: 'Quicksand_500Medium' },
-  btnStack: { gap: 6, justifyContent: 'center' },
-  convertBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center' },
-  convertBtnText: { fontSize: 13, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
-  sendBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 8, alignItems: 'center' },
-  sendBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Quicksand_600SemiBold' },
+  translateInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)', paddingRight: 4, paddingBottom: 4, minHeight: 100 },
+  inputInWrapper: { flex: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#333', maxHeight: 200, minHeight: 80, fontFamily: 'Quicksand_500Medium' },
+  convertBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center' },
+  convertBtnText: { fontSize: 15, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },
+  sendBtn: { flex: 1, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  sendBtnText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', fontFamily: 'Quicksand_600SemiBold' },
   btnDisabled: { opacity: 0.5 },
   nuanceContainer: { backgroundColor: '#F0F2F5', paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
   sliderContainer: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(200,200,255,0.3)' },
-  sliderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold' },
-  badge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
+  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold', marginBottom: 8 },
+  badgeFloating: { position: 'absolute', top: -28, zIndex: 10, width: 0, overflow: 'visible', alignItems: 'center' },
+  badge: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: 'Quicksand_700Bold' },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   sliderEmoji: { fontSize: 20, fontFamily: 'Quicksand_400Regular' },
-  sliderTrack: { flex: 1 },
+  sliderTrack: { flex: 1, overflow: 'visible', paddingTop: 32 },
   slider: { width: '100%', height: 26 },
   dotsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8, marginTop: 10 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ddd' },
   toneActionsRow: { flexDirection: 'row', gap: 8 },
-  toneBtnOuter: { flex: 1 },
+  toneBtnOuter: {},
   toneBtn: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 16, alignItems: 'center', borderWidth: 2, borderColor: 'transparent' },
   toneBtnActive: { borderColor: '#667eea' },
   toneBtnText: { fontSize: 13, fontWeight: '600', color: '#333', fontFamily: 'Quicksand_600SemiBold' },

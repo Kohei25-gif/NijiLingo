@@ -40,12 +40,45 @@ const STORAGE_KEYS = {
   TAGS: 'nijilingo_tags',
 } as const;
 
+export interface TranslateChatMessage {
+  id: number;
+  type: 'self' | 'partner';
+  original: string;
+  translation: string;
+  reverseTranslation: string;
+  explanation: { point: string; explanation: string } | null;
+  detectedLanguage?: string;
+}
+
+export type TranslateDraft = {
+  partnerInputText: string;
+  selfInputText: string;
+  // 翻訳結果
+  preview: { translation: string; reverseTranslation: string; explanation: { point: string; explanation: string } | null; noChange?: boolean };
+  showPreview: boolean;
+  previewSourceText: string;
+  // トーン調整
+  toneAdjusted: boolean;
+  sliderValue: number;
+  sliderBucket: number;
+  isCustomActive: boolean;
+  customTone: string;
+  lockedSliderPosition: number | null;
+  toneDiffExplanation: { point: string; explanation: string } | null;
+  // 検出言語
+  detectedLang: string;
+  // メッセージボード履歴
+  messages: TranslateChatMessage[];
+};
+
 type AppDataContextValue = {
   partners: Partner[];
   tags: Tag[];
   selectedTag: string;
   currentPartnerId: number | null;
   isLoaded: boolean;
+  translateDraft: TranslateDraft;
+  setTranslateDraft: (patch: Partial<TranslateDraft> | ((prev: TranslateDraft) => Partial<TranslateDraft>)) => void;
   setSelectedTag: (id: string) => void;
   setCurrentPartnerId: (id: number | null) => void;
   addPartner: (partner: Omit<Partner, 'id' | 'lastMessage' | 'lastTime'> & { id?: number; lastMessage?: string; lastTime?: string }) => Partner;
@@ -75,6 +108,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [currentPartnerId, setCurrentPartnerId] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [translateDraft, setTranslateDraftRaw] = useState<TranslateDraft>({
+    partnerInputText: '', selfInputText: '',
+    preview: { translation: '', reverseTranslation: '', explanation: null },
+    showPreview: false, previewSourceText: '',
+    toneAdjusted: false, sliderValue: 0, sliderBucket: 0,
+    isCustomActive: false, customTone: '', lockedSliderPosition: null, toneDiffExplanation: null,
+    detectedLang: '', messages: [],
+  });
+
+  const setTranslateDraft = (patch: Partial<TranslateDraft> | ((prev: TranslateDraft) => Partial<TranslateDraft>)) => {
+    setTranslateDraftRaw(prev => {
+      const resolved = typeof patch === 'function' ? patch(prev) : patch;
+      return { ...prev, ...resolved };
+    });
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -176,6 +224,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     selectedTag,
     currentPartnerId,
     isLoaded,
+    translateDraft,
+    setTranslateDraft,
     setSelectedTag,
     setCurrentPartnerId,
     addPartner,
@@ -187,7 +237,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     addTag,
     editTag,
     deleteTag,
-  }), [partners, tags, selectedTag, currentPartnerId, isLoaded]);
+  }), [partners, tags, selectedTag, currentPartnerId, isLoaded, translateDraft]);
 
   return (
     <AppDataContext.Provider value={value}>

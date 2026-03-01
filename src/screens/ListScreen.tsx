@@ -212,7 +212,7 @@ export default function ListScreen({ navigation }: Props) {
               <TouchableOpacity onPress={() => setShowAddPartner(false)} style={styles.btnCancel}>
                 <Text style={styles.btnCancelText}>キャンセル</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleCreatePartner}>
+              <TouchableOpacity onPress={handleCreatePartner} style={{ flex: 1 }}>
                 <LinearGradient
                   colors={['#E2F0CB', '#B5EAD7']}
                   start={{ x: 0, y: 0 }}
@@ -304,6 +304,7 @@ export default function ListScreen({ navigation }: Props) {
                   if (menuPartnerId !== null) deletePartner(menuPartnerId);
                   closePartnerMenu();
                 }}
+                style={{ flex: 1 }}
               >
                 <View style={[styles.btnSave, styles.btnDanger]}>
                   <Text style={styles.btnSaveText}>削除</Text>
@@ -341,6 +342,7 @@ export default function ListScreen({ navigation }: Props) {
                     setShowAddTag(false);
                   }
                 }}
+                style={{ flex: 1 }}
               >
                 <LinearGradient
                   colors={['#E2F0CB', '#B5EAD7']}

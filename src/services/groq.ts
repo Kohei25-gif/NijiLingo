@@ -248,6 +248,7 @@ ${part2Instruction}
 - 必ず「です・ます調」で統一すること。文末には必ず「。」をつけること
 - JSON不要、テキストのみ
 - 解説で取り上げる表現は必ず「」で囲むこと
+- 変化の方向はユーザーメッセージのラベルに従って説明すること。ラベルが示すトーンの方向と矛盾する説明をしないこと
 
 【禁止】
 - 言語学の専門用語（縮約形、完全形、能動態、受動態など）は使わない。中学生でもわかる言葉で説明すること
@@ -282,6 +283,7 @@ ${part2InstructionEn}
 - No JSON, plain text only
 - MUST write in ${langName}
 - Wrap key expressions in 「」
+- Explain the change in the direction indicated by the labels in the user message. Do not contradict the tone direction shown by the labels
 
 【Forbidden】
 - Do NOT use linguistic jargon (contraction, full form, active voice, passive voice, etc.). Use plain everyday words that anyone can understand
