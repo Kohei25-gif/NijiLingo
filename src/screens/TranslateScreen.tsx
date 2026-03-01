@@ -1100,6 +1100,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
     const currCached = translationCacheRef.current[currKey];
     const sourceLangCode = getLangCodeFromName(effectiveSourceLang);
     const prevUiBucket = prev.tone === 'casual' ? -prev.bucket : prev.tone === 'business' ? prev.bucket : 0;
+    const currentUiBucket = currentTone === 'casual' ? -currentInternalBucket : currentTone === 'business' ? currentInternalBucket : 0;
 
     if (!prevCached || !currCached) {
       setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getNotYetGeneratedText(sourceLangCode) });
@@ -1112,7 +1113,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
     try {
       const keywords = extractChangedParts(prevCached.translation, currCached.translation);
       const explanation = await generateToneDifferenceExplanation(
-        prevCached.translation, currCached.translation, prevUiBucket, currentInternalBucket, currentTone, sourceLangCode, keywords ?? undefined
+        prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, keywords ?? undefined
       );
       setTranslateDraft((prev) => ({ explanationCache: { ...prev.explanationCache, [explCacheKey]: explanation } }));
       setToneDiffExplanation(explanation);

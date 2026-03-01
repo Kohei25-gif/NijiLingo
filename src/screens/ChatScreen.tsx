@@ -863,6 +863,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     const currCached = translationCacheRef.current[currKey];
     const sourceLangCode = getLangCodeFromName(sourceLang);
     const prevUiBucket = prev.tone === 'casual' ? -prev.bucket : prev.tone === 'business' ? prev.bucket : 0;
+    const currentUiBucket = currentTone === 'casual' ? -currentInternalBucket : currentTone === 'business' ? currentInternalBucket : 0;
 
     if (!prevCached || !currCached) {
       setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getNotYetGeneratedText(sourceLangCode) });
@@ -878,7 +879,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         prevCached.translation,
         currCached.translation,
         prevUiBucket,
-        currentInternalBucket,
+        currentUiBucket,
         currentTone,
         sourceLangCode,
         keywords ?? undefined
