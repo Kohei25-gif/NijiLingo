@@ -1124,13 +1124,13 @@ export default function TranslateScreen({ route, navigation }: Props) {
       <>
         {nuance ? (
           <View style={styles.nuanceTipBox}>
-            <Text style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>
+            <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>
           </View>
         ) : null}
         {grammar ? (
           <View style={styles.grammarTipBox}>
             <Text style={styles.grammarTipLabel}>{getGrammarLabel(langCode)}</Text>
-            <Text style={styles.grammarTipText}>{renderWithHighlight(grammar)}</Text>
+            <Text selectable style={styles.grammarTipText}>{renderWithHighlight(grammar)}</Text>
           </View>
         ) : null}
       </>
@@ -1224,7 +1224,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
           </Text>
 
           {/* 逆翻訳 */}
-          <Text style={styles.messageSubText}>
+          <Text selectable style={styles.messageSubText}>
             （{isSelf ? msg.reverseTranslation : msg.translation}）
           </Text>
 
@@ -1277,7 +1277,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
                       <Text style={[styles.pointText, !isSelf && styles.pointTextPartner]}>{msg.explanation.point}</Text>
                     </LinearGradient>
                   ) : null}
-                  <Text style={styles.explanationDetailText}>{msg.explanation.explanation}</Text>
+                  <Text selectable style={styles.explanationDetailText}>{msg.explanation.explanation}</Text>
                 </>
               ) : (
                 <View style={styles.loadingRow}>
@@ -1429,7 +1429,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
             {toneLoading && <ActivityIndicator size="small" color="#4A90D9" style={{ marginLeft: 8 }} />}
           </View>
           <Text selectable style={styles.previewTranslation}>{preview.translation}</Text>
-          <Text style={styles.previewReverse}>逆翻訳：{preview.reverseTranslation}</Text>
+          <Text selectable style={styles.previewReverse}>逆翻訳：{preview.reverseTranslation}</Text>
 
           {!isCustomActive && (
             <View style={styles.toneDiffSection}>
@@ -1489,7 +1489,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
             {toneLoading && <ActivityIndicator size="small" color="#4A90D9" style={{ marginLeft: 8 }} />}
           </View>
           <Text selectable style={styles.previewTranslation}>{preview.translation}</Text>
-          <Text style={styles.previewReverse}>逆翻訳：{preview.reverseTranslation}</Text>
+          <Text selectable style={styles.previewReverse}>逆翻訳：{preview.reverseTranslation}</Text>
 
           {!isCustomActive && (
             <View style={styles.toneDiffSection}>
