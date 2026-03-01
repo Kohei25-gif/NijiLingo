@@ -395,16 +395,14 @@ export default function TranslateScreen({ route, navigation }: Props) {
   // ── 検証API状態 ──
   const [verificationStatus, setVerificationStatus] = useState<Record<string, 'verifying' | 'fixing' | 'passed' | null>>({});
 
-  // ── キャッシュ（state + ref） ──
-  const [translationCache, setTranslationCacheState] = useState<Record<string, {
-    translation: string;
-    reverseTranslation: string;
-    noChange?: boolean;
-  }>>({});
-  const translationCacheRef = useRef<Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>>({});
-
-  // ── 解説キャッシュ（同じトーンで再度開いた時にAPI呼び出しを省略） ──
-  const explanationCacheRef = useRef<Record<string, { point: string; explanation: string }>>({});
+  // ── キャッシュ（contextから取得、ナビゲーション跨ぎで永続化） ──
+  const translationCacheRef = useRef(translateDraft.translationCache);
+  const explanationCacheRef = useRef(translateDraft.explanationCache);
+  // context→refの同期
+  translationCacheRef.current = translateDraft.translationCache;
+  explanationCacheRef.current = translateDraft.explanationCache;
+  // useEffectトリガー用のstate（translationCacheの変更検知用）
+  const [translationCacheVersion, setTranslationCacheVersion] = useState(0);
 
   // ── Refs ──
   const prevBucketRef = useRef(0);
@@ -420,7 +418,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
     if (!cached) return;
     if (cached.translation === preview.translation && cached.reverseTranslation === preview.reverseTranslation && cached.noChange === preview.noChange) return;
     setPreview(prev => ({ ...prev, translation: cached.translation, reverseTranslation: cached.reverseTranslation, noChange: cached.noChange }));
-  }, [sliderBucket, isCustomActive, previewSourceText, translationCache]);
+  }, [sliderBucket, isCustomActive, previewSourceText, translationCacheVersion]);
 
   // ── トーン差分解説リセット（初回マウント時はスキップ） ──
   const isFirstMount = useRef(true);
@@ -433,10 +431,12 @@ export default function TranslateScreen({ route, navigation }: Props) {
     setToneDiffExpanded(false);
   }, [sliderBucket, isCustomActive, previewSourceText]);
 
-  // ── キャッシュ更新ヘルパー（ref + state両方） ──
+  // ── キャッシュ更新ヘルパー（context永続化） ──
   const updateTranslationCache = (updates: Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>) => {
-    Object.assign(translationCacheRef.current, updates);
-    setTranslationCacheState(prev => ({ ...prev, ...updates }));
+    setTranslateDraft((prev) => ({
+      translationCache: { ...prev.translationCache, ...updates },
+    }));
+    setTranslationCacheVersion(v => v + 1);
   };
 
   // ── コピー関数 ──
@@ -1074,7 +1074,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
       try {
         const explanation = await generateExplanation(preview.translation, sourceLangCode0, targetLangCode0, sourceLangCode0);
         const result = { point: explanation.point || getDifferenceFromText(sourceLangCode0, 0), explanation: explanation.explanation };
-        explanationCacheRef.current[explCacheKey] = result;
+        setTranslateDraft((prev) => ({ explanationCache: { ...prev.explanationCache, [explCacheKey]: result } }));
         setToneDiffExplanation(result);
       } catch {
         setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode0, 0), explanation: getFailedToGenerateText(sourceLangCode0) });
@@ -1114,7 +1114,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
       const explanation = await generateToneDifferenceExplanation(
         prevCached.translation, currCached.translation, prevUiBucket, currentInternalBucket, currentTone, sourceLangCode, keywords ?? undefined
       );
-      explanationCacheRef.current[explCacheKey] = explanation;
+      setTranslateDraft((prev) => ({ explanationCache: { ...prev.explanationCache, [explCacheKey]: explanation } }));
       setToneDiffExplanation(explanation);
     } catch {
       setToneDiffExplanation({ point: getDifferenceFromText(sourceLangCode, prevUiBucket), explanation: getFailedToGenerateText(sourceLangCode) });

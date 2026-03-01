@@ -50,6 +50,12 @@ export interface TranslateChatMessage {
   detectedLanguage?: string;
 }
 
+export type TranslationCacheEntry = {
+  translation: string;
+  reverseTranslation: string;
+  noChange?: boolean;
+};
+
 export type TranslateDraft = {
   partnerInputText: string;
   selfInputText: string;
@@ -69,6 +75,10 @@ export type TranslateDraft = {
   detectedLang: string;
   // メッセージボード履歴
   messages: TranslateChatMessage[];
+  // 翻訳キャッシュ（ナビゲーション跨ぎ永続化）
+  translationCache: Record<string, TranslationCacheEntry>;
+  // 解説キャッシュ
+  explanationCache: Record<string, { point: string; explanation: string }>;
 };
 
 type AppDataContextValue = {
@@ -115,6 +125,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     toneAdjusted: false, sliderValue: 0, sliderBucket: 0,
     isCustomActive: false, customTone: '', lockedSliderPosition: null, toneDiffExplanation: null,
     detectedLang: '', messages: [],
+    translationCache: {}, explanationCache: {},
   });
 
   const setTranslateDraft = (patch: Partial<TranslateDraft> | ((prev: TranslateDraft) => Partial<TranslateDraft>)) => {
