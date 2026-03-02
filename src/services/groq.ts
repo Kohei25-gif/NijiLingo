@@ -265,7 +265,7 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・Explain the NEW expression's meaning using familiar everyday words. List multiple translations/equivalents like "~" "~" "~" to show the range of meaning. Add one short note about what kind of word it is or when it's used.
+・Explain the NEW expression's meaning using familiar everyday words in ${langName}. List multiple translations/equivalents in ${langName} like "~" "~" "~" to show the range of meaning. Add one short note about what kind of word it is or when it's used.
 Do NOT explain the old expression. Focus only on the new one.
 Do NOT quote the entire sentence — extract only the changed part.`;
     const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.
