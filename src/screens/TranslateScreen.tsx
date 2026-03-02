@@ -1129,7 +1129,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
   // ── 解説テキストのnuance/grammar分離+ハイライト表示（Web版と同じ） ──
   const renderExplanationWithSplit = (text: string) => {
-    const sepParts = text.split(/\n\s*---\s*\n/m);
+    const sepParts = text.split(/\n\s*-{3,}\s*\n?/m);
     let nuance: string, grammar: string;
     if (sepParts.length >= 2) {
       nuance = sepParts[0].trim();
