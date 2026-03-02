@@ -231,9 +231,9 @@ export async function generateToneDifferenceExplanation(
   if (sourceLang === 'ja') {
     const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
 「前の表現」→「新しい表現」
-・この2つの表現の違いだけを1〜2文で説明する。文全体の意図には触れないこと。
-※ 文全体ではなく、変わった部分だけを短く抜き出すこと。
-※ 解説文では1行目の表現をそのまま繰り返さないこと。違いだけを説明する。`;
+・新しい方の表現の意味を日本語の身近な言葉で説明する。「〜」「〜」「〜」のように日本語訳を複数並べて意味の幅を見せること。最後に一言、どんな場面で使う言葉かを添える。
+※ 前の表現の説明は不要。新しい表現だけに集中すること。
+※ 文全体ではなく、変わった部分だけを短く抜き出すこと。`;
     const part2Instruction = `パート2: この文全体が相手にどう伝わるかを1〜2文で説明する。
 ※ 「この文は〜の表現です」ではなく「この文は相手に〜という印象を与えます」の方向で書くこと。
 ※ パート1の差分の話を繰り返さないこと。`;
@@ -265,9 +265,9 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・Explain the difference between these two expressions only, in 1-2 sentences. Do NOT discuss the overall sentence intent.
-Do NOT quote the entire sentence — extract only the changed part.
-Do NOT re-quote the expressions from line 1 in the explanation. Just describe the difference.`;
+・Explain the NEW expression's meaning using familiar everyday words. List multiple translations/equivalents like "~" "~" "~" to show the range of meaning. Add one short note about what kind of word it is or when it's used.
+Do NOT explain the old expression. Focus only on the new one.
+Do NOT quote the entire sentence — extract only the changed part.`;
     const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.
 Write as "This sounds like ~" or "This gives the impression of ~", NOT "This is a ~ expression".
 Do NOT repeat the diff from Part 1.`;
