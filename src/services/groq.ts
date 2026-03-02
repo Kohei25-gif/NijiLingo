@@ -231,7 +231,9 @@ export async function generateToneDifferenceExplanation(
   if (sourceLang === 'ja') {
     const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
 「前の表現」→「新しい表現」
-・新しい方の表現の意味を日本語の身近な言葉で説明する。「〜」「〜」「〜」のように日本語訳を複数並べて意味の幅を見せること。最後に一言、どんな場面で使う言葉かを添える。
+・「〜」「〜」「〜」のように日本語訳を複数並べて、新しい表現の意味の幅を見せる。
+・どんな場面で使う言葉かを一言添える。
+※ 各「・」は必ず改行で区切ること。
 ※ 前の表現の説明は不要。新しい表現だけに集中すること。
 ※ 文全体ではなく、変わった部分だけを短く抜き出すこと。`;
     const part2Instruction = `パート2: この文全体が相手にどう伝わるかを1〜2文で説明する。
@@ -265,7 +267,9 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・Explain the NEW expression's meaning using familiar everyday words in ${langName}. List multiple translations/equivalents in ${langName} like "~" "~" "~" to show the range of meaning. Add one short note about what kind of word it is or when it's used.
+・List multiple translations/equivalents in ${langName} like "~" "~" "~" to show the range of meaning of the NEW expression.
+・Add one short note about what kind of word it is or when it's used.
+Each ・ MUST be on its own line.
 Do NOT explain the old expression. Focus only on the new one.
 Do NOT quote the entire sentence — extract only the changed part.`;
     const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.

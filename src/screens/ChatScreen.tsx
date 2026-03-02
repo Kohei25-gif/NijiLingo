@@ -917,13 +917,13 @@ export default function ChatScreen({ route, navigation }: Props) {
               const firstNl = nuance.indexOf('\n');
               if (firstNl > 0 && nuance.substring(0, firstNl).includes('→')) {
                 const diffLine = nuance.substring(0, firstNl);
-                const rest = nuance.substring(firstNl + 1).trim();
+                const rest = nuance.substring(firstNl + 1).trim().replace(/\s+・/g, '\n・');
                 return (<>
                   <Text selectable style={styles.explanationDiffLine}>{renderWithHighlight(diffLine)}</Text>
                   {rest ? <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(rest)}</Text> : null}
                 </>);
               }
-              return <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>;
+              return <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance.replace(/\s+・/g, '\n・'))}</Text>;
             })()}
           </View>
         ) : null}
