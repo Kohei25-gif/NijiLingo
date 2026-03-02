@@ -231,13 +231,17 @@ export async function generateToneDifferenceExplanation(
   if (sourceLang === 'ja') {
     const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
 「前の表現」→「新しい表現」
-・「新しい表現」は「訳A」「訳B」「訳C」という意味で、〜に使います。（1文にまとめる）
-例: ・「sketchy」は「怪しい」「うさんくさい」「信用できない」という意味で、カジュアルな会話でよく使うスラングです。
-※ 箇条書きは「・」1つだけ。複数の「・」に分けないこと。
-※ 前の表現の説明は不要。新しい表現だけに集中すること。
+・1行目: 前の表現と新しい表現の違いを1文で説明する。
+・2行目: 新しい表現の意味を口語的な日本語で説明し、具体的にどんな場面・相手に使えるかを1文で書く。
+例:
+「steal」→「took」
+・「steal」は「盗んだ」と直接非難する表現ですが、「took」は「取った」と事実を述べるだけで、非難のトーンが抑えられます。
+・「took」はネイティブが日常会話で普通に使うシンプルな表現で、相手を責めずに指摘したいときに使えます。
+※ 箇条書きは「・」2つだけ。3つ以上に分けないこと。
 ※ 変わった部分だけを短く抜き出すこと（2〜4語程度）。文全体を引用しないこと。`;
-    const part2Instruction = `パート2: この文全体が相手にどう伝わるかを1〜2文で説明する。
-※ 「この文は〜の表現です」ではなく「この文は相手に〜という印象を与えます」の方向で書くこと。
+    const part2Instruction = `パート2: この文全体が相手にどう伝わるかを口語的な日本語で1〜2文で説明する。
+例: 「押しつけがましくなく、さらっとお願いしてる感じで伝わります」
+※ 「この文は〜の表現です」のような硬い書き方は避けること。
 ※ パート1の差分の話を繰り返さないこと。`;
 
     systemPrompt = `/no_think
@@ -267,13 +271,17 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・「new expression」means "translationA" "translationB" "translationC" in ${langName}, used for ~. (1 sentence)
-Example: ・「sketchy」means "suspicious" "shady" "untrustworthy", a casual slang often used in conversation.
-Only 1 bullet (・). Do NOT split into multiple ・ lines.
-Do NOT explain the old expression. Focus only on the new one.
+・Line 1: Compare the old and new expressions — what changed and how the tone/nuance shifted. (1 sentence)
+・Line 2: Explain the new expression in everyday ${langName} — what it means and when/where to use it. (1 sentence)
+Example:
+「steal」→「took」
+・「steal」directly accuses someone of stealing, while「took」simply states a fact, softening the tone of blame.
+・「took」is a simple everyday expression that native speakers use when pointing something out without sounding confrontational.
+Exactly 2 bullets (・). Do NOT split into more.
 Extract only the changed part (2-4 words). Do NOT quote the entire sentence.`;
-    const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.
-Write as "This sounds like ~" or "This gives the impression of ~", NOT "This is a ~ expression".
+    const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader, using everyday ${langName}.
+Example: "This comes across as a casual, no-pressure request — like you're just throwing it out there."
+Avoid stiff phrasing like "This is a ~ expression".
 Do NOT repeat the diff from Part 1.`;
 
     systemPrompt = `/no_think
