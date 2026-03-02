@@ -231,8 +231,9 @@ export async function generateToneDifferenceExplanation(
   if (sourceLang === 'ja') {
     const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
 「前の表現」→「新しい表現」
-・「新しい表現」は「日本語訳1」「日本語訳2」「日本語訳3」という意味で、〜に使います。
-※ 箇条書きは「・」1つだけ。1文にまとめること。複数の「・」に分けないこと。
+・「新しい表現」は「訳A」「訳B」「訳C」という意味で、〜に使います。（1文にまとめる）
+例: ・「sketchy」は「怪しい」「うさんくさい」「信用できない」という意味で、カジュアルな会話でよく使うスラングです。
+※ 箇条書きは「・」1つだけ。複数の「・」に分けないこと。
 ※ 前の表現の説明は不要。新しい表現だけに集中すること。
 ※ 変わった部分だけを短く抜き出すこと（2〜4語程度）。文全体を引用しないこと。`;
     const part2Instruction = `パート2: この文全体が相手にどう伝わるかを1〜2文で説明する。
@@ -266,8 +267,9 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・「new expression」means "translation1" "translation2" "translation3" in ${langName}, used for ~.
-Only 1 bullet (・). Combine everything into 1 sentence. Do NOT split into multiple ・ lines.
+・「new expression」means "translationA" "translationB" "translationC" in ${langName}, used for ~. (1 sentence)
+Example: ・「sketchy」means "suspicious" "shady" "untrustworthy", a casual slang often used in conversation.
+Only 1 bullet (・). Do NOT split into multiple ・ lines.
 Do NOT explain the old expression. Focus only on the new one.
 Extract only the changed part (2-4 words). Do NOT quote the entire sentence.`;
     const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.
