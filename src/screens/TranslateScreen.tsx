@@ -2239,9 +2239,8 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: '#3D4F7C',
     fontFamily: 'Quicksand_600SemiBold',
-    backgroundColor: 'rgba(255, 200, 87, 0.18)',
     textDecorationLine: 'underline' as const,
-    textDecorationColor: 'rgba(255, 200, 87, 0.5)',
+    textDecorationColor: 'rgba(240, 160, 80, 0.6)',
   },
   changeArrow: {
     color: '#E67E22',

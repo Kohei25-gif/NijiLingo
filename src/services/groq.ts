@@ -244,8 +244,8 @@ export async function generateToneDifferenceExplanation(
 ・「took」はネイティブが日常会話で普通に使うシンプルな表現で、相手を責めずに指摘したいときに使えます。
 ※ 箇条書きは「・」2つだけ。3つ以上に分けないこと。
 ※ 変わった部分だけを短く抜き出すこと（2〜4語程度）。文全体を引用しないこと。`;
-    const part2Instruction = `パート2: この文を受け取った相手がどう受け止めるかを、原文の内容に触れながら口語的な日本語で1〜2文で描写する。
-例: 「『あ、気づいてたんだ』くらいの軽い受け止め方になります。問い詰められてる感じはしません」
+    const part2Instruction = `パート2: この文を受け取った相手がどう受け止めるかを、原文の内容や意図に触れ、相手目線で口語的な日本語で1〜2文で描写する。
+例: 「反対はされてるけど、自分の考えも一回ちゃんと受け止めてくれてる感じがして、嫌な気持ちにはなりません」
 ※ パート1の差分の話を繰り返さないこと。`;
 
     systemPrompt = `/no_think
@@ -283,8 +283,8 @@ Example:
 ・「took」is a simple everyday expression that native speakers use when pointing something out without sounding confrontational.
 Exactly 2 bullets (・). Do NOT split into more.
 Extract only the changed part (2-4 words). Do NOT quote the entire sentence.`;
-    const part2InstructionEn = `Part 2: Describe how the recipient would take this sentence, referencing the original meaning, in 1-2 sentences using everyday ${langName}.
-Example: "The listener would think 'oh, they noticed' — it feels like a light observation, not an accusation."
+    const part2InstructionEn = `Part 2: Describe how the recipient would take this sentence, referencing the original meaning and intent, from the recipient's perspective, in 1-2 sentences using everyday ${langName}.
+Example: "They're disagreeing, but it feels like they actually considered my point first — so it doesn't feel bad."
 Do NOT repeat the diff from Part 1.`;
 
     systemPrompt = `/no_think
