@@ -1338,7 +1338,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
     <SafeAreaView style={styles.container}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? undefined : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* ── ロゴヘッダー ── */}
