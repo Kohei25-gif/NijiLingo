@@ -1111,9 +1111,12 @@ export default function TranslateScreen({ route, navigation }: Props) {
     setToneDiffLoading(true);
     setToneDiffExpanded(true);
     try {
-      const keywords = extractChangedParts(prevCached.translation, currCached.translation);
+      const rawKeywords = extractChangedParts(prevCached.translation, currCached.translation);
+      // 差分が長すぎる場合はLLMに任せる（4単語超 = 文全体が変わっている）
+      const keywords = rawKeywords && rawKeywords.prev.split(/\s+/).length <= 4 && rawKeywords.curr.split(/\s+/).length <= 4
+        ? rawKeywords : undefined;
       const explanation = await generateToneDifferenceExplanation(
-        prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, keywords ?? undefined
+        prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, keywords, previewSourceText
       );
       setTranslateDraft((prev) => ({ explanationCache: { ...prev.explanationCache, [explCacheKey]: explanation } }));
       setToneDiffExplanation(explanation);
@@ -1126,7 +1129,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
   // ── 解説テキストのnuance/grammar分離+ハイライト表示（Web版と同じ） ──
   const renderExplanationWithSplit = (text: string) => {
-    const sepParts = text.split(/\n---\n|^---\n|\n---$/m);
+    const sepParts = text.split(/\n\s*---\s*\n/m);
     let nuance: string, grammar: string;
     if (sepParts.length >= 2) {
       nuance = sepParts[0].trim();
@@ -1141,7 +1144,18 @@ export default function TranslateScreen({ route, navigation }: Props) {
       <>
         {nuance ? (
           <View style={styles.nuanceTipBox}>
-            <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>
+            {(() => {
+              const firstNl = nuance.indexOf('\n');
+              if (firstNl > 0 && nuance.substring(0, firstNl).includes('→')) {
+                const diffLine = nuance.substring(0, firstNl);
+                const rest = nuance.substring(firstNl + 1).trim();
+                return (<>
+                  <Text selectable style={styles.explanationDiffLine}>{renderWithHighlight(diffLine)}</Text>
+                  {rest ? <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(rest)}</Text> : null}
+                </>);
+              }
+              return <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>;
+            })()}
           </View>
         ) : null}
         {grammar ? (
@@ -1155,10 +1169,15 @@ export default function TranslateScreen({ route, navigation }: Props) {
   };
 
   // 「」内をハイライト表示するヘルパー（Web版renderWithHighlight相当）
+  // Web版はlinear-gradient(transparent 60%, color 60%)で下部だけ柔らかいハイライト
+  // RNではTextネストでbackgroundColor(薄め) + textDecorationで再現
   const renderWithHighlight = (text: string): React.ReactNode => {
-    const parts = text.split(/(「[^」]+」)/g);
+    const parts = text.split(/(「[^」]+」|→)/g);
     if (parts.length === 1) return text;
     return parts.map((part, i) => {
+      if (part === '→') {
+        return <Text key={i} style={styles.changeArrow}> ➤ </Text>;
+      }
       const match = part.match(/^「(.+)」$/);
       if (match) {
         return <Text key={i} style={styles.grammarHighlight}>{match[1]}</Text>;
@@ -1694,7 +1713,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
             <TouchableOpacity
               onPress={handleSelfSend}
               disabled={!showPreview}
-              style={!showPreview ? styles.btnDisabled : undefined}
+              style={[{ flex: 0, alignSelf: 'stretch' }, !showPreview ? styles.btnDisabled : undefined]}
             >
               <LinearGradient
                 colors={['#d4a5c9', '#b8c4e0']}
@@ -1950,7 +1969,7 @@ const styles = StyleSheet.create({
   },
   appTitle: {
     fontFamily: 'Quicksand_700Bold',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#333',
     letterSpacing: -0.5,
@@ -2171,6 +2190,13 @@ const styles = StyleSheet.create({
   pointTextPartner: {
     color: '#2D5A7B',
   },
+  explanationDiffLine: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 24,
+    fontFamily: 'Quicksand_400Regular',
+    marginBottom: 8,
+  },
   explanationDetailText: {
     fontSize: 14,
     color: '#444',
@@ -2210,10 +2236,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Quicksand_400Regular',
   },
   grammarHighlight: {
-    backgroundColor: 'rgba(255, 200, 87, 0.35)',
     fontWeight: '600' as const,
     color: '#3D4F7C',
     fontFamily: 'Quicksand_600SemiBold',
+    backgroundColor: 'rgba(255, 200, 87, 0.18)',
+    textDecorationLine: 'underline' as const,
+    textDecorationColor: 'rgba(255, 200, 87, 0.5)',
+  },
+  changeArrow: {
+    color: '#E67E22',
+    fontWeight: '700' as const,
+    fontSize: 14,
   },
   loadingRow: {
     flexDirection: 'row',
@@ -2324,11 +2357,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sliderTitle: {
+    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#555',
     fontFamily: 'Quicksand_600SemiBold',
-    marginRight: 8,
   },
   badge: {
     paddingHorizontal: 14,
@@ -2611,7 +2644,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     maxHeight: 200,
-    minHeight: 80,
+    minHeight: 120,
     fontFamily: 'Quicksand_500Medium',
   },
   selfFooterRow: {
@@ -2670,7 +2703,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     flex: 1,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',

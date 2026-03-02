@@ -130,22 +130,22 @@ export function getLangNameFromCode(langCode: string): string {
 }
 
 /**
- * 「豆知識」ラベルを各言語で返す
+ * 「相手への伝わり方」ラベルを各言語で返す
  */
 export function getGrammarLabel(langCode: string): string {
   const map: Record<string, string> = {
-    'ja': '豆知識',
-    'en': 'Tips',
-    'es': 'Consejos',
-    'fr': 'Astuces',
-    'zh': '小知识',
-    'ko': '꿀팁',
-    'de': 'Tipps',
-    'it': 'Curiosità',
-    'pt': 'Dicas',
-    'cs': 'Tipy',
+    'ja': '相手への伝わり方',
+    'en': 'How It Sounds',
+    'es': 'Cómo suena',
+    'fr': 'Comment ça sonne',
+    'zh': '对方的感受',
+    'ko': '상대방에게 주는 느낌',
+    'de': 'Wie es klingt',
+    'it': 'Come suona',
+    'pt': 'Como soa',
+    'cs': 'Jak to zní',
   }
-  return map[langCode] || 'Grammar'
+  return map[langCode] || 'How It Sounds'
 }
 
 export function getVerifyingText(langCode: string): string {

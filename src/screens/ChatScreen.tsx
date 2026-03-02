@@ -874,7 +874,10 @@ export default function ChatScreen({ route, navigation }: Props) {
     setToneDiffLoading(true);
     setToneDiffExpanded(true);
     try {
-      const keywords = extractChangedParts(prevCached.translation, currCached.translation);
+      const rawKeywords = extractChangedParts(prevCached.translation, currCached.translation);
+      // 差分が長すぎる場合はLLMに任せる（4単語超 = 文全体が変わっている）
+      const keywords = rawKeywords && rawKeywords.prev.split(/\s+/).length <= 4 && rawKeywords.curr.split(/\s+/).length <= 4
+        ? rawKeywords : undefined;
       const explanation = await generateToneDifferenceExplanation(
         prevCached.translation,
         currCached.translation,
@@ -882,7 +885,8 @@ export default function ChatScreen({ route, navigation }: Props) {
         currentUiBucket,
         currentTone,
         sourceLangCode,
-        keywords ?? undefined
+        keywords,
+        previewSourceText
       );
       setChatCache(partnerId, { explanationCache: { ...chatCache.explanationCache, [explCacheKey]: explanation } });
       setToneDiffExplanation(explanation);
@@ -894,7 +898,7 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   const renderExplanationWithSplit = (text: string) => {
-    const sepParts = text.split(/\n---\n|^---\n|\n---$/m);
+    const sepParts = text.split(/\n\s*---\s*\n/m);
     let nuance: string, grammar: string;
     if (sepParts.length >= 2) {
       nuance = sepParts[0].trim();
@@ -909,7 +913,18 @@ export default function ChatScreen({ route, navigation }: Props) {
       <>
         {nuance ? (
           <View style={styles.nuanceTipBox}>
-            <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>
+            {(() => {
+              const firstNl = nuance.indexOf('\n');
+              if (firstNl > 0 && nuance.substring(0, firstNl).includes('→')) {
+                const diffLine = nuance.substring(0, firstNl);
+                const rest = nuance.substring(firstNl + 1).trim();
+                return (<>
+                  <Text selectable style={styles.explanationDiffLine}>{renderWithHighlight(diffLine)}</Text>
+                  {rest ? <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(rest)}</Text> : null}
+                </>);
+              }
+              return <Text selectable style={styles.explanationDetailText}>{renderWithHighlight(nuance)}</Text>;
+            })()}
           </View>
         ) : null}
         {grammar ? (
@@ -923,9 +938,12 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   const renderWithHighlight = (text: string): React.ReactNode => {
-    const parts = text.split(/(「[^」]+」)/g);
+    const parts = text.split(/(「[^」]+」|→)/g);
     if (parts.length === 1) return text;
     return parts.map((part, i) => {
+      if (part === '→') {
+        return <Text key={i} style={styles.changeArrow}> ➤ </Text>;
+      }
       const match = part.match(/^「(.+)」$/);
       if (match) {
         return <Text key={i} style={styles.grammarHighlight}>{match[1]}</Text>;
@@ -1382,12 +1400,14 @@ const styles = StyleSheet.create({
   pointIcon: { fontSize: 14, fontFamily: 'Quicksand_400Regular' },
   pointText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#333', lineHeight: 20, fontFamily: 'Quicksand_700Bold' },
   pointTextPartner: { color: '#2D5A7B' },
+  explanationDiffLine: { fontSize: 14, color: '#444', lineHeight: 24, fontFamily: 'Quicksand_400Regular', marginBottom: 8 },
   explanationDetailText: { fontSize: 14, color: '#444', lineHeight: 24, fontFamily: 'Quicksand_400Regular' },
   nuanceTipBox: { backgroundColor: '#f0f7ff', borderRadius: 8, padding: 10, marginBottom: 6 },
   grammarTipBox: { borderRadius: 12, padding: 14, borderLeftWidth: 3, borderLeftColor: '#7B8EC2' },
   grammarTipLabel: { fontSize: 11, fontWeight: '700', color: '#fff', marginBottom: 6, backgroundColor: '#7B8EC2', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden', fontFamily: 'Quicksand_700Bold' },
   grammarTipText: { fontSize: 13, color: '#4A5578', lineHeight: 20, fontFamily: 'Quicksand_400Regular' },
-  grammarHighlight: { backgroundColor: 'rgba(255, 200, 87, 0.35)', fontWeight: '600', color: '#3D4F7C', fontFamily: 'Quicksand_600SemiBold' },
+  grammarHighlight: { fontWeight: '600' as const, color: '#3D4F7C', fontFamily: 'Quicksand_600SemiBold', backgroundColor: 'rgba(255, 200, 87, 0.18)', textDecorationLine: 'underline' as const, textDecorationColor: 'rgba(255, 200, 87, 0.5)' },
+  changeArrow: { color: '#E67E22', fontWeight: '700' as const, fontSize: 14 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16 },
   loadingText: { fontSize: 14, color: '#666', fontFamily: 'Quicksand_400Regular' },
   partnerInputBox: { backgroundColor: '#fff', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#eee', marginTop: 8 },
@@ -1422,7 +1442,7 @@ const styles = StyleSheet.create({
   nuanceContainer: { backgroundColor: '#F0F2F5', paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
   sliderContainer: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(200,200,255,0.3)' },
   sliderHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  sliderTitle: { fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold', marginRight: 8 },
+  sliderTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: '#555', fontFamily: 'Quicksand_600SemiBold' },
   badge: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 12, fontWeight: '700', fontFamily: 'Quicksand_700Bold' },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

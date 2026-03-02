@@ -206,7 +206,8 @@ export async function generateToneDifferenceExplanation(
   currentLevel: number,
   tone: string,
   sourceLang: string,
-  changedKeywords?: { prev: string; curr: string }
+  changedKeywords?: { prev: string; curr: string },
+  originalText?: string
 ): Promise<ExplanationResult> {
   const langName = getLangNameFromCode(sourceLang)
 
@@ -222,35 +223,20 @@ export async function generateToneDifferenceExplanation(
   const prevLabel = getLevelLabel(previousLevel);
   const currLabel = getLevelLabel(currentLevel);
 
-  // トーン方向の明示的な指示を生成
-  const directionJa = currentLevel < 0
-    ? '※ これはよりカジュアル・くだけた方向への変化です。よりカジュアルになった表現を抜き出して解説してください。「丁寧」「フォーマル」方向の説明は誤りです。'
-    : currentLevel > 0
-    ? '※ これはよりフォーマル・丁寧な方向への変化です。より丁寧・ビジネス的になった表現を抜き出して解説してください。「カジュアル」「くだけた」方向の説明は誤りです。'
-    : '';
-  const directionEn = currentLevel < 0
-    ? '※ This is a change toward MORE CASUAL/informal expression. Highlight expressions that became more casual. Do NOT describe this as becoming more polite or formal.'
-    : currentLevel > 0
-    ? '※ This is a change toward MORE FORMAL/polite expression. Highlight expressions that became more formal. Do NOT describe this as becoming more casual.'
-    : '';
+  // トーン方向ラベルはprevLabel/currLabelで十分（LLMが文脈から判断する）
 
   let systemPrompt: string;
   let userPrompt: string;
 
   if (sourceLang === 'ja') {
-    const toneDirectionJa = currentLevel < 0
-      ? 'よりカジュアル・くだけた'
-      : currentLevel > 0
-      ? 'よりフォーマル・丁寧な'
-      : '変化した';
-    const part1Instruction = `パート1: 前の段階からの変化のうち、${toneDirectionJa}表現を1つだけ抜き出し、「」で囲んで、1〜2文でやさしく解説する。文全体を引用せず、変わった表現だけを短く抜き出すこと。`;
-    const part2Instruction = `パート2: この文に出てくる表現のうち、パート1で取り上げたもの以外を1〜2個選んで「表現」→ その表現だけの説明、の形式で書く。2個書くときは改行で区切ること。
-※ パート1と同じ表現を繰り返すな。別の表現を選ぶこと。
-※ 他の表現と比べない。「〜と比べて」「〜よりも」は禁止。その表現単体の意味・使い方だけを書くこと。
-※ 文の内容をよく読み、この文の中でどう使われているかに合わせて説明すること。
-例:
-「Hold on」→ 「ちょっと待って」という意味で、会話でよく使います。
-「I will」→ I'llを省略しないで言う形で、ちょっと丁寧な響きになります。`;
+    const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
+「前の表現」→「新しい表現」
+・この2つの表現の違いだけを1〜2文で説明する。文全体の意図には触れないこと。
+※ 文全体ではなく、変わった部分だけを短く抜き出すこと。
+※ 解説文では1行目の表現をそのまま繰り返さないこと。違いだけを説明する。`;
+    const part2Instruction = `パート2: この文全体が相手にどう伝わるかを1〜2文で説明する。
+※ 「この文は〜の表現です」ではなく「この文は相手に〜という印象を与えます」の方向で書くこと。
+※ パート1の差分の話を繰り返さないこと。`;
 
     systemPrompt = `/no_think
 あなたはやさしい英語の先生です。わかりやすく丁寧に解説してください。
@@ -266,33 +252,25 @@ ${part2Instruction}
 - 必ず「です・ます調」で統一すること。文末には必ず「。」をつけること
 - JSON不要、テキストのみ
 - 解説で取り上げる表現は必ず「」で囲むこと
-- 変化の方向はユーザーメッセージのラベルに従って説明すること。ラベルが示すトーンの方向と矛盾する説明をしないこと
 
 【禁止】
 - 言語学の専門用語（縮約形、完全形、能動態、受動態など）は使わない。中学生でもわかる言葉で説明すること
 - 「丁寧」「フォーマル」「カジュアル」だけで終わらせない
 - 抽象的な形容詞だけの説明は禁止
-- 「相手は〜のように感じます」のような回りくどい言い方は禁止`;
-    userPrompt = `${prevLabel}: "${previousTranslation}"
+- パート2以外で「相手は〜」という表現は使わない`;
+    userPrompt = `${originalText ? `原文: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
 ${changedKeywords ? `\n変化したキーワード: ${changedKeywords.prev} → ${changedKeywords.curr}\nこのキーワードに合わせて解説してください。` : ''}
-${directionJa}
 ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
-    const toneDirectionEn = currentLevel < 0
-      ? 'more casual/informal'
-      : currentLevel > 0
-      ? 'more formal/polite'
-      : 'changed';
-    const part1InstructionEn = `Part 1: From the change, pick 1 expression that became ${toneDirectionEn}. Wrap it in 「」 and explain in 1-2 sentences. Do NOT quote the entire sentence — extract only the short expression that changed.`;
-    const part2InstructionEn = `Part 2: Pick 1-2 expressions from this sentence that were NOT already covered in Part 1. Explain each in the format below. If writing 2, put each on a separate line.
-Do NOT repeat the same expression from Part 1. Choose different ones.
-Do NOT compare expressions. No "compared to ~" or "unlike ~". Explain each expression on its own.
-Read the sentence carefully and explain how the expression is used in this specific context.
-「expression」→ explanation of that expression alone
-Example:
-「Hold on」→ Means "wait a moment", commonly used in conversation
-「I will」→ The unshortened form of "I'll", sounds a bit more polite`;
+    const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
+「old expression」→「new expression」
+・Explain the difference between these two expressions only, in 1-2 sentences. Do NOT discuss the overall sentence intent.
+Do NOT quote the entire sentence — extract only the changed part.
+Do NOT re-quote the expressions from line 1 in the explanation. Just describe the difference.`;
+    const part2InstructionEn = `Part 2: Explain in 1-2 sentences how this sentence comes across to the listener/reader.
+Write as "This sounds like ~" or "This gives the impression of ~", NOT "This is a ~ expression".
+Do NOT repeat the diff from Part 1.`;
 
     systemPrompt = `/no_think
 You are a kind language teacher. Explain clearly and simply.
@@ -308,17 +286,15 @@ ${part2InstructionEn}
 - No JSON, plain text only
 - MUST write in ${langName}
 - Wrap key expressions in 「」
-- Explain the change in the direction indicated by the labels in the user message. Do not contradict the tone direction shown by the labels
 
 【Forbidden】
 - Do NOT use linguistic jargon (contraction, full form, active voice, passive voice, etc.). Use plain everyday words that anyone can understand
 - Do not end with just "polite", "formal", or "casual"
 - Abstract adjectives alone are not allowed
-- Do not use roundabout phrasing like "the recipient feels that the speaker..."`;
-    userPrompt = `${prevLabel}: "${previousTranslation}"
+- Outside Part 2, do not use phrasing like "the recipient feels that the speaker..."`;
+    userPrompt = `${originalText ? `Original: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
 ${changedKeywords ? `\nChanged keywords: ${changedKeywords.prev} → ${changedKeywords.curr}\nFocus your explanation on these keywords.` : ''}
-${directionEn}
 Explain the change from ${prevLabel} to ${currLabel} in ${langName}.`;
   }
 
