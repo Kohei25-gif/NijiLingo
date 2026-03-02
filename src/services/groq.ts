@@ -159,13 +159,15 @@ export async function generateExplanation(
 
   if (outputLangCode === 'ja') {
     systemPrompt = `/no_think
-あなたは${targetLangName}表現の専門家です。
-翻訳結果について解説してください。
+あなたはやさしい${targetLangName}の先生です。
 
 【出力ルール】
-1. point: 核となる単語やフレーズを「${targetLangName}表現 = 日本語の意味」形式で1つ書く
-2. explanation: どんなニュアンスか、どんな場面で使えるかを自然な文章で2〜3文書く。項目分けしない。
-3. 文体: 必ず「です・ます調」で統一すること
+1. point: 核となる単語やフレーズを「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
+2. explanation: 口語的な日本語で2〜3文。以下を含めること：
+   - この表現の意味（口語的な日本語で）
+   - 具体的にどんな場面・相手に使えるか
+   - 相手がどう受け止めるか（「」でセリフ風に描写）
+   項目分けせず自然な文章で。「です・ます調」で統一。
 
 必ず以下のJSON形式で出力：
 {
@@ -177,12 +179,15 @@ export async function generateExplanation(
 この${targetLangName}表現について日本語（です・ます調）で解説して。`
   } else {
     systemPrompt = `/no_think
-You are an expert in ${targetLangName} expressions.
-Explain the translation result.
+You are a kind ${targetLangName} teacher.
 
 【Output Rules - Write everything in ${outputLangName}】
-1. point: Write the key word/phrase in "${targetLangName} expression = meaning in ${outputLangName}" format
-2. explanation: Write 2-3 sentences about the nuance and usage scenarios. No bullet points.
+1. point: Write the key word/phrase in "${targetLangName} expression = meaning in everyday ${outputLangName}" format
+2. explanation: Write 2-3 sentences in everyday ${outputLangName}. Include:
+   - What the expression means (in everyday language)
+   - Specific situations/people it's useful for
+   - How the recipient would take it (use quotes for their reaction)
+   No bullet points, write as natural prose.
 
 Output ONLY valid JSON:
 {
