@@ -234,7 +234,7 @@ export async function generateToneDifferenceExplanation(
   let userPrompt: string;
 
   if (sourceLang === 'ja') {
-    const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
+    const part1Instruction = `パート1: 指定された変化した表現について、以下の形式で書く。
 「前の表現」→「新しい表現」
 ・1行目: 表現が変わることでトーンがどう変わるかを1文で説明する。
 ・2行目: 新しい表現の意味を口語的な日本語で説明し、具体的にどんな場面・相手に使えるかを1文で書く。
@@ -270,10 +270,10 @@ ${part2Instruction}
 - パート2以外で「相手は〜」という表現は使わない`;
     userPrompt = `${originalText ? `原文: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
-${changedKeywords ? `\n変化したキーワード: ${changedKeywords.prev} → ${changedKeywords.curr}\nこのキーワードに合わせて解説してください。` : ''}
-${prevLabel}から${currLabel}への変化を解説してください。`;
+${changedKeywords ? `\n注目する変化: ${changedKeywords.prev} → ${changedKeywords.curr}` : ''}
+この1つの変化について解説してください。`;
   } else {
-    const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
+    const part1InstructionEn = `Part 1: Write about the specified changed expression in this format:
 「old expression」→「new expression」
 ・Line 1: Explain how the tone shifts by changing this expression. (1 sentence)
 ・Line 2: Explain the new expression in everyday ${langName} — what it means and when/where to use it. (1 sentence)
@@ -309,14 +309,14 @@ ${part2InstructionEn}
 - Outside Part 2, do not use phrasing like "the recipient feels that the speaker..."`;
     userPrompt = `${originalText ? `Original: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
 ${currLabel}: "${currentTranslation}"
-${changedKeywords ? `\nChanged keywords: ${changedKeywords.prev} → ${changedKeywords.curr}\nFocus your explanation on these keywords.` : ''}
-Explain the change from ${prevLabel} to ${currLabel} in ${langName}.`;
+${changedKeywords ? `\nFocus on this change: ${changedKeywords.prev} → ${changedKeywords.curr}` : ''}
+Explain this one change in ${langName}.`;
   }
 
   const pointText = getDifferenceFromText(sourceLang, previousLevel);
 
   try {
-    const response = await callGeminiAPI(MODELS.FULL, systemPrompt, userPrompt);
+    const response = await callGeminiAPI(MODELS.FULL, systemPrompt, userPrompt, 0.3, undefined, 300);
     // LLMが「1文目:」「パート1:」等のラベルを付けてしまう場合に除去
     const cleaned = response.trim()
       .replace(/[1-2１-２]文目[:：]\s*/g, '')

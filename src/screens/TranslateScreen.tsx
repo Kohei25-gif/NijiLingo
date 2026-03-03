@@ -1111,10 +1111,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
     setToneDiffLoading(true);
     setToneDiffExpanded(true);
     try {
-      const rawKeywords = extractChangedParts(prevCached.translation, currCached.translation);
-      // 差分が長すぎる場合はLLMに任せる（4単語超 = 文全体が変わっている）
-      const keywords = rawKeywords && rawKeywords.prev.split(/\s+/).length <= 4 && rawKeywords.curr.split(/\s+/).length <= 4
-        ? rawKeywords : undefined;
+      const keywords = extractChangedParts(prevCached.translation, currCached.translation) ?? undefined;
       const explanation = await generateToneDifferenceExplanation(
         prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, keywords, previewSourceText
       );
