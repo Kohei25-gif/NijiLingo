@@ -105,34 +105,35 @@ function getSliderTrackColor(value: number): string {
   return `rgb(${Math.round(153 + (44 - 153) * ratio)},${Math.round(153 + (90 - 153) * ratio)},${Math.round(153 + (160 - 153) * ratio)})`;
 }
 
-// 2つの翻訳テキストから変化したキーワードを抽出
+// 2つの翻訳テキストから変化したキーワードを抽出（head+tail matching方式）
 function extractChangedParts(prev: string, curr: string): { prev: string; curr: string } | null {
   const normalize = (w: string) => w.toLowerCase().replace(/[.,!?;:'"]/g, '');
   const prevWords = prev.split(/\s+/);
   const currWords = curr.split(/\s+/);
-  const minLen = Math.min(prevWords.length, currWords.length);
+
+  // 先頭から一致する範囲を探す
   let start = 0;
+  const minLen = Math.min(prevWords.length, currWords.length);
   while (start < minLen && normalize(prevWords[start]) === normalize(currWords[start])) {
     start++;
   }
-  if (start >= minLen && prevWords.length === currWords.length) return null;
-  let prevFirstEnd = start;
-  let currFirstEnd = start;
-  const remainPrev = prevWords.slice(start);
-  const remainCurr = currWords.slice(start);
-  for (let offset = 1; offset <= Math.max(remainPrev.length, remainCurr.length); offset++) {
-    if (start + offset < prevWords.length && start + offset < currWords.length &&
-        normalize(prevWords[start + offset]) === normalize(currWords[start + offset])) {
-      prevFirstEnd = start + offset - 1;
-      currFirstEnd = start + offset - 1;
-      break;
-    }
-    prevFirstEnd = Math.min(start + offset, prevWords.length - 1);
-    currFirstEnd = Math.min(start + offset, currWords.length - 1);
+
+  // 末尾から一致する範囲を探す
+  let prevEnd = prevWords.length - 1;
+  let currEnd = currWords.length - 1;
+  while (prevEnd >= start && currEnd >= start && normalize(prevWords[prevEnd]) === normalize(currWords[currEnd])) {
+    prevEnd--;
+    currEnd--;
   }
+
+  // 完全一致（差分なし）
+  if (start > prevEnd && start > currEnd) return null;
+
+  // 前後1語のコンテキスト
   const ctxStart = Math.max(0, start - 1);
-  const prevCtxEnd = Math.min(prevWords.length - 1, prevFirstEnd + 1);
-  const currCtxEnd = Math.min(currWords.length - 1, currFirstEnd + 1);
+  const prevCtxEnd = Math.min(prevWords.length - 1, prevEnd + 1);
+  const currCtxEnd = Math.min(currWords.length - 1, currEnd + 1);
+
   return {
     prev: prevWords.slice(ctxStart, prevCtxEnd + 1).join(' '),
     curr: currWords.slice(ctxStart, currCtxEnd + 1).join(' '),
