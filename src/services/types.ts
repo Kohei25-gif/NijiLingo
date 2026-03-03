@@ -14,7 +14,6 @@ export interface TranslationResult {
 export interface ExplanationResult {
   point: string;
   explanation: string;
-  perception?: string;
 }
 
 // ═══ 翻訳オプション ═══
