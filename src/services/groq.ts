@@ -158,7 +158,7 @@ export async function generateExplanation(
 
   if (outputLangCode === 'ja') {
     systemPrompt = `/no_think
-あなたはやさしい${targetLangName}の先生です。
+あなたは誰にでもわかりやすく解説することが得意な${targetLangName}の先生です。
 
 【出力ルール】
 1. point: 核となるフレーズ（どうしてもない場合は単語）を「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
@@ -178,7 +178,7 @@ export async function generateExplanation(
 この${targetLangName}表現について日本語（です・ます調）で解説して。`
   } else {
     systemPrompt = `/no_think
-You are a kind ${targetLangName} teacher.
+You are a ${targetLangName} teacher who excels at explaining things in a way anyone can understand.
 
 【Output Rules - Write everything in ${outputLangName}】
 1. point: Write the key phrase (or word only if no phrase exists) in "${targetLangName} expression = meaning in everyday ${outputLangName}" format
@@ -231,7 +231,7 @@ export async function generateToneDifferenceExplanation(
 
   if (sourceLang === 'ja') {
     systemPrompt = `/no_think
-あなたはやさしい${targetLangName}の先生です。
+あなたは誰にでもわかりやすく解説することが得意な${targetLangName}の先生です。
 
 【出力ルール】
 1. point: 核となるフレーズ（どうしてもない場合は単語）を「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
@@ -254,7 +254,7 @@ export async function generateToneDifferenceExplanation(
 この${targetLangName}翻訳について日本語（です・ます調）で解説して。`
   } else {
     systemPrompt = `/no_think
-You are a kind ${targetLangName} teacher.
+You are a ${targetLangName} teacher who excels at explaining things in a way anyone can understand.
 
 【Output Rules - Write everything in ${langName}】
 1. point: Write the key phrase (or word only if no phrase exists) in "${targetLangName} expression = meaning in everyday ${langName}" format
