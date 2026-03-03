@@ -2295,6 +2295,7 @@ const styles = StyleSheet.create({
   },
   previewContainerExpanded: {
     maxHeight: Dimensions.get('window').height * 0.35,
+    flexShrink: 0,
   },
   previewLabelRow: {
     flexDirection: 'row',
