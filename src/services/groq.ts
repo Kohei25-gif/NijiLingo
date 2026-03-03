@@ -236,11 +236,11 @@ export async function generateToneDifferenceExplanation(
   if (sourceLang === 'ja') {
     const part1Instruction = `パート1: 変化した表現を1つ選び、以下の形式で書く。
 「前の表現」→「新しい表現」
-・1行目: 前の表現と新しい表現の違いを1文で説明する。
+・1行目: 表現が変わることでトーンがどう変わるかを1文で説明する。
 ・2行目: 新しい表現の意味を口語的な日本語で説明し、具体的にどんな場面・相手に使えるかを1文で書く。
 例:
 「steal」→「took」
-・「steal」は「盗んだ」と直接非難する表現ですが、「took」は「取った」と事実を述べるだけで、非難のトーンが抑えられます。
+・「steal」→「took」にすることで、「盗んだ」という非難のニュアンスが消えて、事実を述べるトーンになります。
 ・「took」はネイティブが日常会話で普通に使うシンプルな表現で、相手を責めずに指摘したいときに使えます。
 ※ 箇条書きは「・」2つだけ。3つ以上に分けないこと。
 ※ 変わった部分だけを短く抜き出すこと（2〜4語程度）。文全体を引用しないこと。`;
@@ -275,11 +275,11 @@ ${prevLabel}から${currLabel}への変化を解説してください。`;
   } else {
     const part1InstructionEn = `Part 1: Pick 1 expression that changed. Write in this format:
 「old expression」→「new expression」
-・Line 1: Compare the old and new expressions — what changed and how the tone/nuance shifted. (1 sentence)
+・Line 1: Explain how the tone shifts by changing this expression. (1 sentence)
 ・Line 2: Explain the new expression in everyday ${langName} — what it means and when/where to use it. (1 sentence)
 Example:
 「steal」→「took」
-・「steal」directly accuses someone of stealing, while「took」simply states a fact, softening the tone of blame.
+・By changing「steal」to「took」, the accusatory nuance of "stealing" disappears and the tone becomes a simple statement of fact.
 ・「took」is a simple everyday expression that native speakers use when pointing something out without sounding confrontational.
 Exactly 2 bullets (・). Do NOT split into more.
 Extract only the changed part (2-4 words). Do NOT quote the entire sentence.`;
