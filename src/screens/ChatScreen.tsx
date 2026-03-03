@@ -637,13 +637,19 @@ export default function ChatScreen({ route, navigation }: Props) {
     await copyToClipboard(preview.translation);
 
     const messageId = Date.now();
+
+    // プレビューで生成済みの解説があればそのまま使う
+    const cachedExplanation = toneDiffExplanation && toneDiffExplanation.point
+      ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation }
+      : null;
+
     const newMessage: Message = {
       id: messageId,
       type: 'self',
       original: inputText,
       translation: preview.translation,
       reverseTranslation: preview.reverseTranslation,
-      explanation: { point: '', explanation: '' },
+      explanation: cachedExplanation || { point: '', explanation: '' },
     };
 
     updatePartnerMessages([...messages, newMessage], preview.translation);
@@ -655,16 +661,19 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
-    const partnerLangCode = getLangCodeFromName(partner.language);
-    generateExplanation(preview.translation, 'ja', partnerLangCode, 'ja')
-      .then(explanation => {
-        const current = getCurrentPartner();
-        if (!current) return;
-        updatePartner(current.id, {
-          messages: current.messages.map(m => m.id === messageId ? { ...m, explanation } : m),
-        });
-      })
-      .catch(() => {});
+    // 解説がなかった場合のみバックグラウンドで取得
+    if (!cachedExplanation) {
+      const partnerLangCode = getLangCodeFromName(partner.language);
+      generateExplanation(preview.translation, 'ja', partnerLangCode, 'ja')
+        .then(explanation => {
+          const current = getCurrentPartner();
+          if (!current) return;
+          updatePartner(current.id, {
+            messages: current.messages.map(m => m.id === messageId ? { ...m, explanation } : m),
+          });
+        })
+        .catch(() => {});
+    }
   };
 
   const handlePartnerMessageAdd = async () => {
@@ -776,6 +785,12 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (!partner) return;
     if (toneDiffExpanded) {
       setToneDiffExpanded(false);
+      return;
+    }
+
+    // 既に解説データがあれば再生成せず展開するだけ
+    if (toneDiffExplanation && !toneDiffLoading) {
+      setToneDiffExpanded(true);
       return;
     }
 

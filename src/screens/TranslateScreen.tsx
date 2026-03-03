@@ -886,13 +886,19 @@ export default function TranslateScreen({ route, navigation }: Props) {
     await copyToClipboard(preview.translation);
 
     const msgId = Date.now();
+
+    // プレビューで生成済みの解説があればそのまま使う
+    const cachedExplanation = toneDiffExplanation && toneDiffExplanation.point
+      ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation }
+      : null;
+
     const newMsg: ChatMessage = {
       id: msgId,
       type: 'self',
       original: inputText || previewSourceText,
       translation: preview.translation,
       reverseTranslation: preview.reverseTranslation,
-      explanation: null,
+      explanation: cachedExplanation,
     };
 
     setMessages(prev => [...prev, newMsg]);
@@ -905,16 +911,18 @@ export default function TranslateScreen({ route, navigation }: Props) {
     // 自動スクロール
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
-    // バックグラウンドで解説取得
-    const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang);
-    const tgtCode = getLangCodeForExplanation(targetLang);
-    generateExplanation(preview.translation, srcCode, tgtCode, srcCode)
-      .then(exp => {
-        setMessages(prev => prev.map(m =>
-          m.id === msgId ? { ...m, explanation: exp } : m
-        ));
-      })
-      .catch(() => {});
+    // 解説がなかった場合のみバックグラウンドで取得
+    if (!cachedExplanation) {
+      const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang);
+      const tgtCode = getLangCodeForExplanation(targetLang);
+      generateExplanation(preview.translation, srcCode, tgtCode, srcCode)
+        .then(exp => {
+          setMessages(prev => prev.map(m =>
+            m.id === msgId ? { ...m, explanation: exp } : m
+          ));
+        })
+        .catch(() => {});
+    }
   };
 
   // ══════════════════════════════════════════════
@@ -1009,6 +1017,12 @@ export default function TranslateScreen({ route, navigation }: Props) {
     // 既に展開中なら閉じる
     if (toneDiffExpanded) {
       setToneDiffExpanded(false);
+      return;
+    }
+
+    // 既に解説データがあれば再生成せず展開するだけ
+    if (toneDiffExplanation && !toneDiffLoading) {
+      setToneDiffExpanded(true);
       return;
     }
 
