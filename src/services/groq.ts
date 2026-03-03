@@ -165,7 +165,7 @@ export async function generateExplanation(
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
-   - この文を受け取った相手がどう受け止めるかを、対象の文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。相手が嫌な思いをしたり、勘違いしたりする文章の場合は、注意点等を必ず含めて書くこと。
+   - この文を受け取った相手がどう受け止めるかを、対象の文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
    項目分けせず自然な文章で。「です・ます調」で統一。
 
 必ず以下のJSON形式で出力：
@@ -185,7 +185,7 @@ You are a ${targetLangName} teacher who excels at explaining things in a way any
 2. explanation: Write 2-3 sentences in everyday ${outputLangName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
-   - Explain frankly in 1-3 sentences how the recipient would perceive this message, based on a deep understanding of the context and intent of the text. If the message could cause discomfort or misunderstanding, be sure to include cautions or notes about it.
+   - Explain frankly in 1-3 sentences how the recipient would perceive this message, based on a deep understanding of the context and intent of the text. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
    No bullet points, write as natural prose.
 
 Output ONLY valid JSON:
@@ -238,7 +238,7 @@ export async function generateToneDifferenceExplanation(
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
-   - この文を受け取った相手がどう受け止めるかを、対象の文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。相手が嫌な思いをしたり、勘違いしたりする文章の場合は、注意点等を必ず含めて書くこと。
+   - この文を受け取った相手がどう受け止めるかを、対象の文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
    項目分けせず自然な文章で。「です・ます調」で統一。
 
 ※ 前のトーンの翻訳も参考として渡します。前のトーンに一字一句同じ表現がある場合は、それとは別の表現を選んで解説すること。
@@ -261,7 +261,7 @@ You are a ${targetLangName} teacher who excels at explaining things in a way any
 2. explanation: Write 2-3 sentences in everyday ${langName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
-   - Explain frankly in 1-3 sentences how the recipient would perceive this message, based on a deep understanding of the context and intent of the text. If the message could cause discomfort or misunderstanding, be sure to include cautions or notes about it.
+   - Explain frankly in 1-3 sentences how the recipient would perceive this message, based on a deep understanding of the context and intent of the text. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
    No bullet points, write as natural prose.
 
 The previous tone translation is also provided for reference. If an expression appears word-for-word identical in the previous translation, pick a different expression to explain.
