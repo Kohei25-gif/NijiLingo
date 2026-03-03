@@ -1020,12 +1020,6 @@ export default function TranslateScreen({ route, navigation }: Props) {
       return;
     }
 
-    // 既に解説データがあれば再生成せず展開するだけ
-    if (toneDiffExplanation && !toneDiffLoading) {
-      setToneDiffExpanded(true);
-      return;
-    }
-
     const { tone: currentTone, bucket: currentInternalBucket } = sliderToToneBucket(sliderBucket);
     const effectiveSourceLang = sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang;
     const effectiveTargetLang = targetLang;

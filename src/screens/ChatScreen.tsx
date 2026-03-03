@@ -788,12 +788,6 @@ export default function ChatScreen({ route, navigation }: Props) {
       return;
     }
 
-    // 既に解説データがあれば再生成せず展開するだけ
-    if (toneDiffExplanation && !toneDiffLoading) {
-      setToneDiffExpanded(true);
-      return;
-    }
-
     const { tone: currentTone, bucket: currentInternalBucket } = sliderToToneBucket(sliderBucket);
     const sourceLang = '日本語';
     const targetLang = partner.language;
