@@ -161,7 +161,7 @@ export async function generateExplanation(
 あなたはやさしい${targetLangName}の先生です。
 
 【出力ルール】
-1. point: 核となる単語やフレーズを「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
+1. point: 核となるフレーズ（どうしてもない場合は単語）を「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
@@ -181,7 +181,7 @@ export async function generateExplanation(
 You are a kind ${targetLangName} teacher.
 
 【Output Rules - Write everything in ${outputLangName}】
-1. point: Write the key word/phrase in "${targetLangName} expression = meaning in everyday ${outputLangName}" format
+1. point: Write the key phrase (or word only if no phrase exists) in "${targetLangName} expression = meaning in everyday ${outputLangName}" format
 2. explanation: Write 2-3 sentences in everyday ${outputLangName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
@@ -234,7 +234,7 @@ export async function generateToneDifferenceExplanation(
 あなたはやさしい${targetLangName}の先生です。
 
 【出力ルール】
-1. point: 核となる単語やフレーズを「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
+1. point: 核となるフレーズ（どうしてもない場合は単語）を「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
@@ -257,7 +257,7 @@ export async function generateToneDifferenceExplanation(
 You are a kind ${targetLangName} teacher.
 
 【Output Rules - Write everything in ${langName}】
-1. point: Write the key word/phrase in "${targetLangName} expression = meaning in everyday ${langName}" format
+1. point: Write the key phrase (or word only if no phrase exists) in "${targetLangName} expression = meaning in everyday ${langName}" format
 2. explanation: Write 2-3 sentences in everyday ${langName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
