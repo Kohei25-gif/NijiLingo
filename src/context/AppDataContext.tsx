@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface Explanation {
   point: string;
   explanation: string;
-  perception?: string;
 }
 
 export interface Message {

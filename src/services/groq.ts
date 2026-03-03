@@ -141,7 +141,6 @@ function sanitizeExplanation(explanation: ExplanationResult): ExplanationResult 
   return {
     point: explanation.point || '',
     explanation: explanation.explanation || '',
-    perception: explanation.perception || '',
   };
 }
 
@@ -166,14 +165,13 @@ export async function generateExplanation(
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
+   - 相手が文章全体を受け手として読んだ時にどう受け止めるかを、文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
    項目分けせず自然な文章で。「です・ます調」で統一。
-3. perception: 相手が文章全体を受け手として読んだ時にどう受け止めるかを、文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
 
 必ず以下のJSON形式で出力：
 {
   "point": "${targetLangName}表現 = 意味",
-  "explanation": "です・ます調で2〜3文の解説",
-  "perception": "文章全体の伝わり方"
+  "explanation": "です・ます調で2〜3文の解説"
 }`
     userPrompt = `${targetLangName}翻訳: ${translatedText}
 
@@ -187,14 +185,13 @@ You are a ${targetLangName} teacher who excels at explaining things in a way any
 2. explanation: Write 2-3 sentences in everyday ${outputLangName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
+   - Explain frankly in 1-3 sentences how the recipient would perceive the message as a whole when reading it, based on a deep understanding of the context and intent. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
    No bullet points, write as natural prose.
-3. perception: Explain frankly in 1-3 sentences how the recipient would perceive the message as a whole when reading it, based on a deep understanding of the context and intent. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
 
 Output ONLY valid JSON:
 {
   "point": "${targetLangName} expression = meaning",
-  "explanation": "2-3 sentences explanation in ${outputLangName}",
-  "perception": "how the recipient perceives the message"
+  "explanation": "2-3 sentences explanation in ${outputLangName}"
 }`
     userPrompt = `${targetLangName} translation: ${translatedText}
 
@@ -241,16 +238,15 @@ export async function generateToneDifferenceExplanation(
 2. explanation: 口語的な日本語で2〜3文。以下を含めること：
    - この表現の意味（口語的な日本語で）
    - 具体的にどんな場面・相手に使えるか
+   - 相手が文章全体を受け手として読んだ時にどう受け止めるかを、文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
    項目分けせず自然な文章で。「です・ます調」で統一。
-3. perception: 相手が文章全体を受け手として読んだ時にどう受け止めるかを、文章の文脈や意図を深く理解した上で、わかりやすい言葉で１〜３文の日本語で率直に説明すること。また、相手が嫌な思いをしたり、勘違いしたりする恐れ（皮肉表現なども含む）のある文章の場合の時のみ、注意点等を必ず含めて書くこと。
 
 ※ 前のトーンの翻訳も参考として渡します。前のトーンに一字一句同じ表現がある場合は、それとは別の表現を選んで解説すること。
 
 必ず以下のJSON形式で出力：
 {
   "point": "${targetLangName}表現 = 意味",
-  "explanation": "です・ます調で2〜3文の解説",
-  "perception": "文章全体の伝わり方"
+  "explanation": "です・ます調で2〜3文の解説"
 }`
     userPrompt = `${originalText ? `原文: 「${originalText}」\n` : ''}前のトーンの翻訳: "${previousTranslation}"
 この翻訳: "${currentTranslation}"
@@ -265,16 +261,15 @@ You are a ${targetLangName} teacher who excels at explaining things in a way any
 2. explanation: Write 2-3 sentences in everyday ${langName}. Include:
    - What the expression means (in everyday language)
    - Specific situations/people it's useful for
+   - Explain frankly in 1-3 sentences how the recipient would perceive the message as a whole when reading it, based on a deep understanding of the context and intent. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
    No bullet points, write as natural prose.
-3. perception: Explain frankly in 1-3 sentences how the recipient would perceive the message as a whole when reading it, based on a deep understanding of the context and intent. Only when the message could cause discomfort or misunderstanding (including sarcasm or irony), be sure to include cautions or notes about it.
 
 The previous tone translation is also provided for reference. If an expression appears word-for-word identical in the previous translation, pick a different expression to explain.
 
 Output ONLY valid JSON:
 {
   "point": "${targetLangName} expression = meaning",
-  "explanation": "2-3 sentences in ${langName}",
-  "perception": "how the recipient perceives the message"
+  "explanation": "2-3 sentences in ${langName}"
 }`
     userPrompt = `${originalText ? `Original: 「${originalText}」\n` : ''}Previous tone translation: "${previousTranslation}"
 This translation: "${currentTranslation}"
