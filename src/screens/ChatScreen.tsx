@@ -112,41 +112,6 @@ function getSliderTrackColor(value: number): string {
   return `rgb(${Math.round(153 + (44 - 153) * ratio)},${Math.round(153 + (90 - 153) * ratio)},${Math.round(153 + (160 - 153) * ratio)})`;
 }
 
-// head+tail matching方式で変化部分を抽出
-function extractChangedParts(prev: string, curr: string): { prev: string; curr: string } | null {
-  const normalize = (w: string) => w.toLowerCase().replace(/[.,!?;:'"]/g, '');
-  const prevWords = prev.split(/\s+/);
-  const currWords = curr.split(/\s+/);
-
-  // 先頭から一致する範囲を探す
-  let start = 0;
-  const minLen = Math.min(prevWords.length, currWords.length);
-  while (start < minLen && normalize(prevWords[start]) === normalize(currWords[start])) {
-    start++;
-  }
-
-  // 末尾から一致する範囲を探す
-  let prevEnd = prevWords.length - 1;
-  let currEnd = currWords.length - 1;
-  while (prevEnd >= start && currEnd >= start && normalize(prevWords[prevEnd]) === normalize(currWords[currEnd])) {
-    prevEnd--;
-    currEnd--;
-  }
-
-  // 完全一致（差分なし）
-  if (start > prevEnd && start > currEnd) return null;
-
-  // 前後1語のコンテキスト
-  const ctxStart = Math.max(0, start - 1);
-  const prevCtxEnd = Math.min(prevWords.length - 1, prevEnd + 1);
-  const currCtxEnd = Math.min(currWords.length - 1, currEnd + 1);
-
-  return {
-    prev: prevWords.slice(ctxStart, prevCtxEnd + 1).join(' '),
-    curr: currWords.slice(ctxStart, currCtxEnd + 1).join(' '),
-  };
-}
-
 const PROMPT_VERSION = '2026-02-11-phase2d-fix3';
 const UI_TONE_LEVELS = [0, 50, 100];
 
@@ -876,7 +841,7 @@ export default function ChatScreen({ route, navigation }: Props) {
     setToneDiffLoading(true);
     setToneDiffExpanded(true);
     try {
-      const keywords = extractChangedParts(prevCached.translation, currCached.translation) ?? undefined;
+      const targetLangCode = getLangCodeFromName(targetLang || '英語');
       const explanation = await generateToneDifferenceExplanation(
         prevCached.translation,
         currCached.translation,
@@ -884,7 +849,7 @@ export default function ChatScreen({ route, navigation }: Props) {
         currentUiBucket,
         currentTone,
         sourceLangCode,
-        keywords,
+        targetLangCode,
         previewSourceText
       );
       setChatCache(partnerId, { explanationCache: { ...chatCache.explanationCache, [explCacheKey]: explanation } });

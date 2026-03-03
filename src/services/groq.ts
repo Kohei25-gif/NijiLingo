@@ -42,7 +42,6 @@ import {
   getNoChangeText,
   getLangCodeFromName,
   getLangNameFromCode,
-  getLevelLabel,
 } from './i18n';
 
 // 再エクスポート（App.tsxからのimportを維持するため）
@@ -208,13 +207,14 @@ export async function generateToneDifferenceExplanation(
   previousTranslation: string,
   currentTranslation: string,
   previousLevel: number,
-  currentLevel: number,
+  _currentLevel: number,
   tone: string,
   sourceLang: string,
-  changedKeywords?: { prev: string; curr: string },
+  targetLangCode: string,
   originalText?: string
 ): Promise<ExplanationResult> {
   const langName = getLangNameFromCode(sourceLang)
+  const targetLangName = getLangNameFromCode(targetLangCode) || targetLangCode
 
   if (previousTranslation === currentTranslation) {
     return {
@@ -224,111 +224,66 @@ export async function generateToneDifferenceExplanation(
   }
 
   void tone;
-
-  const prevLabel = getLevelLabel(previousLevel);
-  const currLabel = getLevelLabel(currentLevel);
-
-  // トーン方向ラベルはprevLabel/currLabelで十分（LLMが文脈から判断する）
+  void _currentLevel;
 
   let systemPrompt: string;
   let userPrompt: string;
 
   if (sourceLang === 'ja') {
-    const part1Instruction = `パート1: 指定された変化した表現について、以下の形式で書く。
-「前の表現」→「新しい表現」
-・1行目: 表現が変わることでトーンがどう変わるかを1文で説明する。
-・2行目: 新しい表現の意味を口語的な日本語で説明し、具体的にどんな場面・相手に使えるかを1文で書く。
-例:
-「steal」→「took」
-・このように変えることで、「盗んだ」という非難のニュアンスが消えて、事実を述べるトーンになります。
-・「took」はネイティブが日常会話で普通に使うシンプルな表現で、相手を責めずに指摘したいときに使えます。
-※ 箇条書きは「・」2つだけ。3つ以上に分けないこと。
-※ 変わった部分だけを短く抜き出すこと（2〜4語程度）。文全体を引用しないこと。
-※ 1行目の箇条書きで「前の表現」→「新しい表現」を繰り返さないこと。「このように変えることで」のように書くこと。`;
-    const part2Instruction = `パート2: この文を受け取った相手がどう受け止めるかを、原文の内容や意図に触れ、相手目線で口語的な日本語で1〜2文で描写する。
-例: 「反対はされてるけど、自分の考えも一回ちゃんと受け止めてくれてる感じがして、嫌な気持ちにはなりません」
-※ パート1の差分の話を繰り返さないこと。`;
-
     systemPrompt = `/no_think
-あなたはやさしい英語の先生です。わかりやすく丁寧に解説してください。
+あなたはやさしい${targetLangName}の先生です。
 
-【出力形式】
-${part1Instruction}
----
-${part2Instruction}
+【出力ルール】
+1. point: 核となる単語やフレーズを「${targetLangName}表現 = 口語的な日本語の意味」形式で1つ書く
+2. explanation: 口語的な日本語で2〜3文。以下を含めること：
+   - この表現の意味（口語的な日本語で）
+   - 具体的にどんな場面・相手に使えるか
+   - 相手がどう受け止めるか（「」でセリフ風に描写）
+   項目分けせず自然な文章で。「です・ます調」で統一。
 
-【ルール】
-- パート1とパート2の間に必ず「---」だけの行を入れて区切ること
-- 「パート1」「パート2」のラベルは付けない
-- 必ず「です・ます調」で統一すること。文末には必ず「。」をつけること
-- JSON不要、テキストのみ
-- 解説で取り上げる表現は必ず「」で囲むこと
+※ 前のトーンの翻訳も参考として渡します。前のトーンに一字一句同じ表現がある場合は、それとは別の表現を選んで解説すること。
 
-【禁止】
-- 言語学の専門用語（縮約形、完全形、能動態、受動態など）は使わない。中学生でもわかる言葉で説明すること
-- 「丁寧」「フォーマル」「カジュアル」だけで終わらせない
-- 抽象的な形容詞だけの説明は禁止
-- パート2以外で「相手は〜」という表現は使わない`;
-    userPrompt = `${originalText ? `原文: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
-${currLabel}: "${currentTranslation}"
-${changedKeywords ? `\n注目する変化: ${changedKeywords.prev} → ${changedKeywords.curr}` : ''}
-この1つの変化について解説してください。`;
+必ず以下のJSON形式で出力：
+{
+  "point": "${targetLangName}表現 = 意味",
+  "explanation": "です・ます調で2〜3文の解説"
+}`
+    userPrompt = `${originalText ? `原文: 「${originalText}」\n` : ''}前のトーンの翻訳: "${previousTranslation}"
+この翻訳: "${currentTranslation}"
+
+この${targetLangName}翻訳について日本語（です・ます調）で解説して。`
   } else {
-    const part1InstructionEn = `Part 1: Write about the specified changed expression in this format:
-「old expression」→「new expression」
-・Line 1: Explain how the tone shifts by changing this expression. (1 sentence)
-・Line 2: Explain the new expression in everyday ${langName} — what it means and when/where to use it. (1 sentence)
-Example:
-「steal」→「took」
-・With this change, the accusatory nuance of "stealing" disappears and the tone becomes a simple statement of fact.
-・「took」is a simple everyday expression that native speakers use when pointing something out without sounding confrontational.
-Exactly 2 bullets (・). Do NOT split into more.
-Extract only the changed part (2-4 words). Do NOT quote the entire sentence.
-Do NOT repeat the 「old」→「new」 diff in the first bullet. Use phrasing like "With this change," instead.`;
-    const part2InstructionEn = `Part 2: Describe how the recipient would take this sentence, referencing the original meaning and intent, from the recipient's perspective, in 1-2 sentences using everyday ${langName}.
-Example: "They're disagreeing, but it feels like they actually considered my point first — so it doesn't feel bad."
-Do NOT repeat the diff from Part 1.`;
-
     systemPrompt = `/no_think
-You are a kind language teacher. Explain clearly and simply.
+You are a kind ${targetLangName} teacher.
 
-【Output Format - Write everything in ${langName}】
-${part1InstructionEn}
----
-${part2InstructionEn}
+【Output Rules - Write everything in ${langName}】
+1. point: Write the key word/phrase in "${targetLangName} expression = meaning in everyday ${langName}" format
+2. explanation: Write 2-3 sentences in everyday ${langName}. Include:
+   - What the expression means (in everyday language)
+   - Specific situations/people it's useful for
+   - How the recipient would take it (use quotes for their reaction)
+   No bullet points, write as natural prose.
 
-【Rules】
-- Separate Part 1 and Part 2 with a line containing only "---"
-- Do not add labels like "Part 1" or "Part 2"
-- No JSON, plain text only
-- MUST write in ${langName}
-- Wrap key expressions in 「」
+The previous tone translation is also provided for reference. If an expression appears word-for-word identical in the previous translation, pick a different expression to explain.
 
-【Forbidden】
-- Do NOT use linguistic jargon (contraction, full form, active voice, passive voice, etc.). Use plain everyday words that anyone can understand
-- Do not end with just "polite", "formal", or "casual"
-- Abstract adjectives alone are not allowed
-- Outside Part 2, do not use phrasing like "the recipient feels that the speaker..."`;
-    userPrompt = `${originalText ? `Original: 「${originalText}」\n` : ''}${prevLabel}: "${previousTranslation}"
-${currLabel}: "${currentTranslation}"
-${changedKeywords ? `\nFocus on this change: ${changedKeywords.prev} → ${changedKeywords.curr}` : ''}
-Explain this one change in ${langName}.`;
+Output ONLY valid JSON:
+{
+  "point": "${targetLangName} expression = meaning",
+  "explanation": "2-3 sentences in ${langName}"
+}`
+    userPrompt = `${originalText ? `Original: 「${originalText}」\n` : ''}Previous tone translation: "${previousTranslation}"
+This translation: "${currentTranslation}"
+
+Explain this ${targetLangName} expression in ${langName}.`
   }
-
-  const pointText = getDifferenceFromText(sourceLang, previousLevel);
 
   try {
     const response = await callGeminiAPI(MODELS.FULL, systemPrompt, userPrompt, 0.3, undefined, 300);
-    // LLMが「1文目:」「パート1:」等のラベルを付けてしまう場合に除去
-    const cleaned = response.trim()
-      .replace(/[1-2１-２]文目[:：]\s*/g, '')
-      .replace(/Sentence\s*[1-2][:：]\s*/gi, '')
-      .replace(/パート[1-2１-２][:：]\s*/g, '')
-      .replace(/Part\s*[1-2][:：]\s*/gi, '');
-    return { point: pointText, explanation: cleaned };
+    const parsed = parseJsonResponse<ExplanationResult>(response);
+    return sanitizeExplanation(parsed);
   } catch (error) {
     console.error('[generateToneDifferenceExplanation] error:', error);
-    return { point: pointText, explanation: getFailedToGenerateText(sourceLang) };
+    return { point: getDifferenceFromText(sourceLang, previousLevel), explanation: getFailedToGenerateText(sourceLang) };
   }
 }
 

@@ -105,41 +105,6 @@ function getSliderTrackColor(value: number): string {
   return `rgb(${Math.round(153 + (44 - 153) * ratio)},${Math.round(153 + (90 - 153) * ratio)},${Math.round(153 + (160 - 153) * ratio)})`;
 }
 
-// 2つの翻訳テキストから変化したキーワードを抽出（head+tail matching方式）
-function extractChangedParts(prev: string, curr: string): { prev: string; curr: string } | null {
-  const normalize = (w: string) => w.toLowerCase().replace(/[.,!?;:'"]/g, '');
-  const prevWords = prev.split(/\s+/);
-  const currWords = curr.split(/\s+/);
-
-  // 先頭から一致する範囲を探す
-  let start = 0;
-  const minLen = Math.min(prevWords.length, currWords.length);
-  while (start < minLen && normalize(prevWords[start]) === normalize(currWords[start])) {
-    start++;
-  }
-
-  // 末尾から一致する範囲を探す
-  let prevEnd = prevWords.length - 1;
-  let currEnd = currWords.length - 1;
-  while (prevEnd >= start && currEnd >= start && normalize(prevWords[prevEnd]) === normalize(currWords[currEnd])) {
-    prevEnd--;
-    currEnd--;
-  }
-
-  // 完全一致（差分なし）
-  if (start > prevEnd && start > currEnd) return null;
-
-  // 前後1語のコンテキスト
-  const ctxStart = Math.max(0, start - 1);
-  const prevCtxEnd = Math.min(prevWords.length - 1, prevEnd + 1);
-  const currCtxEnd = Math.min(currWords.length - 1, currEnd + 1);
-
-  return {
-    prev: prevWords.slice(ctxStart, prevCtxEnd + 1).join(' '),
-    curr: currWords.slice(ctxStart, currCtxEnd + 1).join(' '),
-  };
-}
-
 // 言語検出用データ
 const LANGUAGE_PROFILES: Record<string, string[]> = {
   '日本語': ['は', 'す', 'い', 'す_', 'です', 'ます', '日本', '本語', '日本語', 'こん', 'にち', 'ちは', 'あり', 'がと', 'とう'],
@@ -1112,9 +1077,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
     setToneDiffLoading(true);
     setToneDiffExpanded(true);
     try {
-      const keywords = extractChangedParts(prevCached.translation, currCached.translation) ?? undefined;
+      const targetLangCode = getLangCodeFromName(effectiveTargetLang || '英語');
       const explanation = await generateToneDifferenceExplanation(
-        prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, keywords, previewSourceText
+        prevCached.translation, currCached.translation, prevUiBucket, currentUiBucket, currentTone, sourceLangCode, targetLangCode, previewSourceText
       );
       setTranslateDraft((prev) => ({ explanationCache: { ...prev.explanationCache, [explCacheKey]: explanation } }));
       setToneDiffExplanation(explanation);
