@@ -44,7 +44,7 @@ interface ChatMessage {
   original: string;
   translation: string;
   reverseTranslation: string;
-  explanation: { point: string; explanation: string } | null;
+  explanation: { point: string; explanation: string; perception?: string } | null;
   detectedLanguage?: string;
 }
 
@@ -52,7 +52,7 @@ interface ChatMessage {
 interface Preview {
   translation: string;
   reverseTranslation: string;
-  explanation: { point: string; explanation: string } | null;
+  explanation: { point: string; explanation: string; perception?: string } | null;
   noChange?: boolean;
 }
 
@@ -889,7 +889,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
     // プレビューで生成済みの解説があればそのまま使う
     const cachedExplanation = toneDiffExplanation && toneDiffExplanation.point
-      ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation }
+      ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation, perception: toneDiffExplanation.perception }
       : null;
 
     const newMsg: ChatMessage = {
@@ -1284,7 +1284,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
                       <Text style={[styles.pointText, !isSelf && styles.pointTextPartner]}>{msg.explanation.point}</Text>
                     </LinearGradient>
                   ) : null}
-                  <Text selectable style={styles.explanationDetailText}>{msg.explanation.explanation}</Text>
+                  <Text selectable style={styles.explanationDetailText}>{msg.explanation.perception ? msg.explanation.explanation + ' ' + msg.explanation.perception : msg.explanation.explanation}</Text>
                 </>
               ) : (
                 <View style={styles.loadingRow}>
@@ -1468,7 +1468,7 @@ export default function TranslateScreen({ route, navigation }: Props) {
                         <Text style={styles.pointText}>{toneDiffExplanation.point}</Text>
                       </LinearGradient>
                     ) : null}
-                    {renderExplanationWithSplit(toneDiffExplanation.explanation)}
+                    {renderExplanationWithSplit(toneDiffExplanation.perception ? toneDiffExplanation.explanation + ' ' + toneDiffExplanation.perception : toneDiffExplanation.explanation)}
                   </>
                 ) : null}
               </View>
