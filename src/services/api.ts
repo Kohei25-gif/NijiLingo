@@ -4,9 +4,9 @@ import { CONFIG } from './config';
 
 // モデル定義
 export const MODELS = {
-  FULL: 'qwen/qwen3-32b',    // FULL翻訳・解説用（Qwen3-32B, /no_think推論なし）
-  PARTIAL: 'qwen/qwen3-32b', // PARTIAL編集用（Qwen3-32B, /no_think推論なし）
-  VERIFY: 'moonshotai/kimi-k2-instruct-0905', // 検証・修正用（Kimi K2）
+  FULL: 'qwen/qwen3.6-27b',    // FULL翻訳・解説用（Qwen3.6-27B, /no_think推論なし）
+  PARTIAL: 'qwen/qwen3.6-27b', // PARTIAL編集用（Qwen3.6-27B, /no_think推論なし）
+  VERIFY: 'qwen/qwen3.6-27b', // 検証・修正用（旧Kimi K2は廃止のためQwen3.6-27Bに変更）
 } as const;
 
 export class OpenAIApiError extends Error {
