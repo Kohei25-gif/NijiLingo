@@ -49,6 +49,7 @@ import {
   getGrammarLabel,
 } from '../services/i18n';
 import { useAppData, type Message } from '../context/AppDataContext';
+import { PREMIUM_FEATURES_ENABLED } from '../constants/features';
 
 type RootStackParamList = {
   Chat: { partnerId: number };
@@ -1109,7 +1110,8 @@ export default function ChatScreen({ route, navigation }: Props) {
           <TouchableOpacity onPress={() => navigation.navigate('Settings', { partnerId: partner.id })} style={styles.settingsBtn}>
             <Settings size={20} color="#333" strokeWidth={2} />
           </TouchableOpacity>
-          {/* P24: 対面モードはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
+          {/* P24: 対面モードはプレミアム機能。v1では非表示（features.ts参照） */}
+          {PREMIUM_FEATURES_ENABLED && (
           <TouchableOpacity onPress={showPremiumLock} style={[styles.faceToFaceBtn, { opacity: 0.6 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={styles.faceToFaceText}>対面</Text>
@@ -1117,6 +1119,7 @@ export default function ChatScreen({ route, navigation }: Props) {
               <Text style={styles.faceToFaceText}>🔒</Text>
             </View>
           </TouchableOpacity>
+          )}
         </View>
       </View>
 

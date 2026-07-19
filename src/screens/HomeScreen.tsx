@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MessageCircle, Mic, Settings } from 'lucide-react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppData } from '../context/AppDataContext';
+import { PREMIUM_FEATURES_ENABLED } from '../constants/features';
 
 type RootStackParamList = {
   Home: undefined;
@@ -67,7 +68,8 @@ export default function HomeScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
 
-        {/* サブボタン */}
+        {/* サブボタン（P24: v1ではプレミアム機能一式を非表示。features.ts参照） */}
+        {PREMIUM_FEATURES_ENABLED && (
         <View style={styles.subButtons}>
           {/* P24: トークルームはプレミアム機能。ロックバッジ＋淡色表示でナビゲーションをブロック */}
           <TouchableOpacity
@@ -124,6 +126,7 @@ export default function HomeScreen({ navigation }: Props) {
             </LinearGradient>
           </TouchableOpacity>
         </View>
+        )}
       </View>
     </SafeAreaView>
   );

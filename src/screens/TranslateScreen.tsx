@@ -28,6 +28,7 @@ import { translateFull, translateFullSimple, translatePartialSpacy, extractStruc
 import { structureToPromptTextSpacy, extractContentWordsForFullGen, extractFlexibleWords, buildMeaningConstraintText } from '../services/prompts';
 import type { TranslationResult, ExplanationResult } from '../services/types';
 import { getVerifyingText, getFixingText, getNaturalnessCheckLabel, getDifferenceFromText, getNotYetGeneratedText, getFailedToGenerateText, getGrammarLabel } from '../services/i18n';
+import { PREMIUM_FEATURES_ENABLED } from '../constants/features';
 
 type RootStackParamList = {
   Home: undefined;
@@ -1444,34 +1445,37 @@ export default function TranslateScreen({ route, navigation }: Props) {
             </View>
           )}
         </View>
-        {/* P24: トークルームはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
-        <TouchableOpacity onPress={showPremiumLock}>
-          <LinearGradient
-            colors={['#B5EAD7', '#C7CEEA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.actionBtn, styles.actionBtnLocked]}
-          >
-            <Text style={styles.actionBtnText}>📋 トークルーム 🔒</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        {/* P24: 対面モードはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
-        <TouchableOpacity onPress={showPremiumLock}>
-          <LinearGradient
-            colors={['#B5EAD7', '#C7CEEA']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.actionBtn, styles.actionBtnLocked]}
-          >
-            <Text style={styles.actionBtnText}>🎤 対面モード 🔒</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.settingsBtn}
-          onPress={() => {}}
-        >
-          <Settings size={20} color="#333" strokeWidth={2.5} />
-        </TouchableOpacity>
+        {/* P24: プレミアム機能（トークルーム/対面モード）と未実装の設定ボタンはv1では非表示。features.ts参照 */}
+        {PREMIUM_FEATURES_ENABLED && (
+          <>
+            <TouchableOpacity onPress={showPremiumLock}>
+              <LinearGradient
+                colors={['#B5EAD7', '#C7CEEA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.actionBtn, styles.actionBtnLocked]}
+              >
+                <Text style={styles.actionBtnText}>📋 トークルーム 🔒</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={showPremiumLock}>
+              <LinearGradient
+                colors={['#B5EAD7', '#C7CEEA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.actionBtn, styles.actionBtnLocked]}
+              >
+                <Text style={styles.actionBtnText}>🎤 対面モード 🔒</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={() => {}}
+            >
+              <Settings size={20} color="#333" strokeWidth={2.5} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
       {showTalkMenu && (
         <TouchableOpacity
