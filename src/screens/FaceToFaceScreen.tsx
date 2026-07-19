@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,7 +11,7 @@ import {
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Mic, Volume2, Globe } from 'lucide-react-native';
+import { Volume2, Globe } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { translateFull } from '../services/groq';
 import { LANG_CODE_MAP, LANGUAGE_OPTIONS } from '../constants/languages';
@@ -98,14 +97,6 @@ export default function FaceToFaceScreen({ route }: Props) {
     });
   };
 
-  const handleMicPress = () => {
-    Alert.alert(
-      '音声入力',
-      '音声入力はDev Clientビルドが必要です。\nテキスト入力をお使いください。',
-      [{ text: 'OK' }]
-    );
-  };
-
   return (
     <View style={styles.container}>
       {/* ヘッダー */}
@@ -138,25 +129,16 @@ export default function FaceToFaceScreen({ route }: Props) {
         <View style={styles.card}>
           <View style={styles.inputArea}>
             <View style={styles.inputWrapper}>
+              {/* P24: v1では音声機能を出さない。マイクボタン(開発者向けアラート)を削除しテキスト入力のみに */}
               <TextInput
                 style={styles.textArea}
-                placeholder="ここにテキストを入力、または音声入力..."
+                placeholder="ここにテキストを入力..."
                 placeholderTextColor="#9CA3AF"
                 multiline
                 numberOfLines={4}
                 value={faceToFaceInput}
                 onChangeText={setFaceToFaceInput}
               />
-              <TouchableOpacity onPress={handleMicPress}>
-                <LinearGradient
-                  colors={['#667eea', '#764ba2']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.micButton}
-                >
-                  <Mic size={24} color="white" strokeWidth={2.5} />
-                </LinearGradient>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -406,22 +388,6 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 26,
     fontFamily: 'Quicksand_500Medium',
-  },
-  micButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: 'rgba(102, 126, 234, 0.4)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 15,
-    elevation: 4,
-  },
-  micIcon: {
-    fontSize: 24,
-    fontFamily: 'Quicksand_400Regular',
   },
   // 翻訳結果エリア
   resultArea: {

@@ -302,7 +302,9 @@ export async function translatePartnerMessage(
     isNative: false,
   });
 
-  const explanation = await generateExplanation(text, '日本語', partnerLang);
+  // P24: generateExplanationの第3引数はISOコードを期待する。partnerLangは日本語言語名（'韓国語'等）なので
+  // 変換して渡す。変換しないとgetLangNameFromCodeが'English'にフォールバックし解説が英語表現として説明される
+  const explanation = await generateExplanation(text, '日本語', getLangCodeFromName(partnerLang));
 
   return { ...translationResult, explanation };
 }
@@ -377,21 +379,26 @@ export async function translateFullSimple(options: {
   const fullSourceLangEnglish = getLangNameFromCode(getLangCodeFromName(sourceLang));
   const userPromptText = `Translation language: ${fullTargetLangEnglish}\nReverse translation language: ${fullSourceLangEnglish}\n\n${sourceText}`;
 
-  const generate = async (): Promise<TranslationResult> => {
+  const generate = async (): Promise<{ result: TranslationResult; kanaBeforeGuard: boolean }> => {
     const response = await callGeminiAPI(MODELS.FULL, systemPrompt, userPromptText, 0.3, signal);
     console.log('[translateFullSimple] response:', response);
     const parsed = parseJsonResponse<TranslationResult>(response);
-    return applyTranslationLanguageGuard(
+    // P24: かな混入判定はガード適用「前」のparsed.translationで行う。
+    // applyTranslationLanguageGuardが非日本語ターゲットではかなを先にストリップするため、
+    // ガード後のtranslationを見るとP23リトライ条件が永久に発火しない（=リトライが死んでいた）
+    const kanaBeforeGuard = /[ぁ-んァ-ン]/.test(parsed.translation || '');
+    const result = applyTranslationLanguageGuard(
       targetLang,
       applyReverseTranslationGuard(sourceLang, applyEvaluationWordGuard(sourceText, parsed))
     );
+    return { result, kanaBeforeGuard };
   };
 
-  let result = await generate();
-  // P23: かな混入（出力が原文言語のまま返る揺らぎ）は1回だけ再生成する
-  if (targetLang !== '日本語' && /[ぁ-んァ-ン]/.test(result.translation)) {
+  let { result, kanaBeforeGuard } = await generate();
+  // P23/P24: かな混入（出力が原文言語のまま返る揺らぎ）は1回だけ再生成する
+  if (targetLang !== '日本語' && kanaBeforeGuard) {
     console.warn('[translateFullSimple] 言語混入検出 → 再生成:', result.translation);
-    result = await generate();
+    ({ result } = await generate());
   }
   console.log('[translateFullSimple] result:', result);
 

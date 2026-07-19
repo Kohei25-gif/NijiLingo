@@ -268,14 +268,15 @@ export function applyEvaluationWordGuard(
   sourceText: string,
   result: TranslationResult
 ): TranslationResult {
-  if (sourceText.includes('素敵') && !result.reverse_translation.includes('素敵')) {
+  // P24: reverse_translation/translationがundefinedの場合にincludes/testでTypeErrorが出るのを防ぐ
+  if (sourceText.includes('素敵') && !(result.reverse_translation ?? '').includes('素敵')) {
     return { ...result, risk: 'high' };
   }
   const generalClothingTerms = ['洋服', '服装', '服', 'コーデ', '装い'];
   const explicitDressTerms = ['ドレス', 'ワンピース'];
   const hasGeneralClothing = generalClothingTerms.some(term => sourceText.includes(term));
   const hasExplicitDress = explicitDressTerms.some(term => sourceText.includes(term));
-  if (hasGeneralClothing && !hasExplicitDress && /dress/i.test(result.translation)) {
+  if (hasGeneralClothing && !hasExplicitDress && /dress/i.test(result.translation ?? '')) {
     return { ...result, risk: 'high' };
   }
   return result;

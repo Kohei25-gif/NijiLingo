@@ -2,6 +2,15 @@ import { registerRootComponent } from 'expo';
 
 import App from './App';
 
+// P24: 本番ビルドではconsole出力を無効化する（会話内容がデバッグログに露出するのを防ぐ）。
+// console.errorのみクラッシュ調査用に残す
+if (!__DEV__) {
+  console.log = () => {};
+  console.info = () => {};
+  console.warn = () => {};
+  console.debug = () => {};
+}
+
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately

@@ -14,6 +14,7 @@ import {
   SafeAreaView,
   Keyboard,
   Dimensions,
+  Alert,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
@@ -254,6 +255,45 @@ const CUSTOM_PRESETS = [
   { label: 'ギャル', value: 'ギャル' },
 ];
 
+// P24: プレミアム機能ロック。近日プレミアムプランで提供予定の機能はナビゲーションせずアラート表示
+function showPremiumLock() {
+  Alert.alert('プレミアム機能', 'この機能は近日、プレミアムプランでご利用いただけるようになります。');
+}
+
+// ═══ P24: 無料翻訳の1日制限（10回/日） ═══
+const DAILY_TRANSLATION_LIMIT = 10;
+const DAILY_COUNT_KEY = 'nijilingo_daily_count';
+
+function getTodayString(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+// 当日の翻訳回数を返す。日付が変わっていればリセット。getItem/parse失敗時は0扱い（安全側=ユーザー有利）
+async function getDailyTranslationCount(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(DAILY_COUNT_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { date?: string; count?: number };
+    if (parsed?.date !== getTodayString()) return 0;
+    return typeof parsed.count === 'number' ? parsed.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// 当日カウントを+1して保存（翻訳API成功時のみ呼ぶ）
+async function incrementDailyTranslationCount(): Promise<void> {
+  try {
+    const current = await getDailyTranslationCount();
+    await AsyncStorage.setItem(DAILY_COUNT_KEY, JSON.stringify({ date: getTodayString(), count: current + 1 }));
+  } catch {
+    // 保存失敗は無視（安全側）
+  }
+}
+
 // ═══ メインコンポーネント ═══
 
 export default function TranslateScreen({ route, navigation }: Props) {
@@ -372,6 +412,10 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
   // ── Refs ──
   const prevBucketRef = useRef(0);
+  // P24: 確定ボタン連打による二重送信を防ぐre-entrancyガード
+  const isSendingRef = useRef(false);
+  // P24: generateAllToneAdjustmentsの二重実行を防ぐin-flightガード（キー=対象テキスト+言語ペア）
+  const toneGenInFlightRef = useRef<Set<string>>(new Set());
 
   // ── キャッシュ到着時の自動プレビュー更新 ──
   useEffect(() => {
@@ -615,6 +659,12 @@ export default function TranslateScreen({ route, navigation }: Props) {
     const effectiveTargetLang = params.targetLang;
     const effectiveSourceLang = params.sourceLang;
 
+    // P24: 二重実行ガード（翻訳→即ニュアンス調整で同じ約10連LLMチェーンが二重に走るのを防ぐ）
+    const inFlightKey = `${effectiveSourceLang}->${effectiveTargetLang}|${sourceText}`;
+    if (toneGenInFlightRef.current.has(inFlightKey)) return;
+    toneGenInFlightRef.current.add(inFlightKey);
+    try {
+
     const makeCacheKey = (tone: string, bucket: number) =>
       getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang);
 
@@ -710,6 +760,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
     if (!noChangeCas100) verifyAndFixOneBand({ bandKey: 'casual_100', tone: 'casual', bucket: 100, originalText: sourceText, translation: casual100Full.translation, reverseTranslation: casual100Full.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus50) verifyAndFixOneBand({ bandKey: 'business_50', tone: 'business', bucket: 50, originalText: sourceText, translation: finalBusiness50.translation, reverseTranslation: finalBusiness50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus100) verifyAndFixOneBand({ bandKey: 'business_100', tone: 'business', bucket: 100, originalText: sourceText, translation: finalBusiness100.translation, reverseTranslation: finalBusiness100.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+    } finally {
+      toneGenInFlightRef.current.delete(inFlightKey);
+    }
   };
 
   // ★ バックグラウンドトーン先行生成（fire-and-forget）
@@ -748,8 +801,11 @@ export default function TranslateScreen({ route, navigation }: Props) {
     // クライアント側言語検出 + 言語連動
     const detected = sourceLang === '自動認識' ? detectLanguage(sourceText) : sourceLang;
     if (detected) setDetectedLang(detected);
+    // P24: 相手メッセージのソース言語で「自分の返信先言語(self target)」を更新する。
+    // setTargetLangはreceive modeではsetPartnerTargetLangにエイリアスされ、相手の翻訳先(=日本語)を
+    // 上書きして2通目以降の恒等翻訳を招くため、self側のsetterを直接呼ぶ
     if (!selfTargetLangManuallySet.current && detected) {
-      setTargetLang(detected);
+      setSelfTargetLang(detected);
     }
 
     try {
@@ -765,8 +821,9 @@ export default function TranslateScreen({ route, navigation }: Props) {
       // 検出言語を表示 + 言語連動
       if (result.detected_language) {
         setDetectedLang(result.detected_language);
-        if (!selfTargetLangManuallySet.current) {
-          setTargetLang(result.detected_language);
+        // P24: Web版NijiChatと同じく、自動認識時のみ検出言語でself targetを追従させる
+        if (!selfTargetLangManuallySet.current && sourceLang === '自動認識') {
+          setSelfTargetLang(result.detected_language);
         }
       }
 
@@ -842,6 +899,17 @@ export default function TranslateScreen({ route, navigation }: Props) {
       return;
     }
 
+    // P24: 無料翻訳の1日制限。新規翻訳（ベース未キャッシュ）のみ消費する。
+    // 同じテキストの再表示・スライダー操作・ニュアンス調整はキャッシュヒットのため消費しない
+    const isNewTranslation = !baseCached;
+    if (isNewTranslation) {
+      const dailyCount = await getDailyTranslationCount();
+      if (dailyCount >= DAILY_TRANSLATION_LIMIT) {
+        Alert.alert('本日の無料翻訳回数を使い切りました', 'また明日ご利用ください。');
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     setShowPreview(false);
@@ -880,6 +948,11 @@ export default function TranslateScreen({ route, navigation }: Props) {
       }
       setShowPreview(true);
 
+      // P24: 翻訳API成功時のみ日次カウントを+1（新規翻訳のみ）
+      if (isNewTranslation) {
+        await incrementDailyTranslationCount();
+      }
+
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : '翻訳に失敗しました');
@@ -894,46 +967,53 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
   const handleSelfSend = async () => {
     if (!showPreview) return;
+    // P24: 連打による二重送信を防ぐ
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
 
-    await copyToClipboard(preview.translation);
+    try {
+      await copyToClipboard(preview.translation);
 
-    const msgId = Date.now();
+      const msgId = Date.now();
 
-    // プレビューで生成済みの解説があればそのまま使う
-    const cachedExplanation = toneDiffExplanation && toneDiffExplanation.point
-      ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation }
-      : null;
+      // プレビューで生成済みの解説があればそのまま使う
+      const cachedExplanation = toneDiffExplanation && toneDiffExplanation.point
+        ? { point: toneDiffExplanation.point, explanation: toneDiffExplanation.explanation }
+        : null;
 
-    const newMsg: ChatMessage = {
-      id: msgId,
-      type: 'self',
-      original: inputText || previewSourceText,
-      translation: preview.translation,
-      reverseTranslation: preview.reverseTranslation,
-      explanation: cachedExplanation,
-    };
+      const newMsg: ChatMessage = {
+        id: msgId,
+        type: 'self',
+        original: inputText || previewSourceText,
+        translation: preview.translation,
+        reverseTranslation: preview.reverseTranslation,
+        explanation: cachedExplanation,
+      };
 
-    setMessages(prev => [...prev, newMsg]);
-    setInputText('');
-    setShowPreview(false);
-    setToneAdjusted(false);
-    setShowCustomInput(false);
-    setIsCustomActive(false);
+      setMessages(prev => [...prev, newMsg]);
+      setInputText('');
+      setShowPreview(false);
+      setToneAdjusted(false);
+      setShowCustomInput(false);
+      setIsCustomActive(false);
 
-    // 自動スクロール
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+      // 自動スクロール
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
-    // 解説がなかった場合のみバックグラウンドで取得
-    if (!cachedExplanation) {
-      const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang);
-      const tgtCode = getLangCodeForExplanation(targetLang);
-      generateExplanation(preview.translation, srcCode, tgtCode, srcCode)
-        .then(exp => {
-          setMessages(prev => prev.map(m =>
-            m.id === msgId ? { ...m, explanation: exp } : m
-          ));
-        })
-        .catch(() => {});
+      // 解説がなかった場合のみバックグラウンドで取得
+      if (!cachedExplanation) {
+        const srcCode = getLangCodeForExplanation(sourceLang === '自動認識' ? (detectedLang || '日本語') : sourceLang);
+        const tgtCode = getLangCodeForExplanation(targetLang);
+        generateExplanation(preview.translation, srcCode, tgtCode, srcCode)
+          .then(exp => {
+            setMessages(prev => prev.map(m =>
+              m.id === msgId ? { ...m, explanation: exp } : m
+            ));
+          })
+          .catch(() => {});
+      }
+    } finally {
+      isSendingRef.current = false;
     }
   };
 
@@ -1364,24 +1444,26 @@ export default function TranslateScreen({ route, navigation }: Props) {
             </View>
           )}
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('List')}>
+        {/* P24: トークルームはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
+        <TouchableOpacity onPress={showPremiumLock}>
           <LinearGradient
             colors={['#B5EAD7', '#C7CEEA']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.actionBtn}
+            style={[styles.actionBtn, styles.actionBtnLocked]}
           >
-            <Text style={styles.actionBtnText}>📋 トークルーム</Text>
+            <Text style={styles.actionBtnText}>📋 トークルーム 🔒</Text>
           </LinearGradient>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('FaceToFace', {})}>
+        {/* P24: 対面モードはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
+        <TouchableOpacity onPress={showPremiumLock}>
           <LinearGradient
             colors={['#B5EAD7', '#C7CEEA']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.actionBtn}
+            style={[styles.actionBtn, styles.actionBtnLocked]}
           >
-            <Text style={styles.actionBtnText}>🎤 対面モード</Text>
+            <Text style={styles.actionBtnText}>🎤 対面モード 🔒</Text>
           </LinearGradient>
         </TouchableOpacity>
         <TouchableOpacity
@@ -1984,6 +2066,9 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: {
     opacity: 0.5,
+  },
+  actionBtnLocked: {
+    opacity: 0.6,
   },
   actionBtnText: {
     fontSize: 13,

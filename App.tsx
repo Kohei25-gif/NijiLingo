@@ -1,9 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useFonts,
   Quicksand_400Regular,
@@ -18,6 +19,9 @@ import ListScreen from './src/screens/ListScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import FaceToFaceScreen from './src/screens/FaceToFaceScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import Onboarding from './src/components/Onboarding';
+
+const ONBOARDING_DONE_KEY = 'nijilingo_onboarding_done';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,20 +37,35 @@ type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  // P24: フォント読込失敗(error)を無視すると永久ハングするため、fontError時も先に進める
+  const [fontsLoaded, fontError] = useFonts({
     Quicksand_400Regular,
     Quicksand_500Medium,
     Quicksand_600SemiBold,
     Quicksand_700Bold,
   });
+  const fontsReady = fontsLoaded || fontError;
+
+  // P24: オンボーディング。null=判定中, true=表示, false=非表示
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_DONE_KEY)
+      .then(val => setShowOnboarding(val === null))
+      .catch(() => setShowOnboarding(false)); // getItem失敗時は表示しない（安全側）
+  }, []);
+
+  const handleOnboardingDone = useCallback(() => {
+    setShowOnboarding(false);
+    AsyncStorage.setItem(ONBOARDING_DONE_KEY, '1').catch(() => {});
+  }, []);
 
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
+    if (fontsReady) {
       await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsReady]);
 
-  if (!fontsLoaded) {
+  if (!fontsReady || showOnboarding === null) {
     return null;
   }
 
@@ -89,6 +108,12 @@ export default function App() {
           <StatusBar style="auto" />
         </NavigationContainer>
       </AppDataProvider>
+      {/* P24: 初回起動時のみオンボーディングをオーバーレイ表示 */}
+      {showOnboarding && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <Onboarding onDone={handleOnboardingDone} />
+        </View>
+      )}
     </View>
   );
 }

@@ -16,6 +16,11 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
 };
 
+// P24: プレミアム機能ロック。近日プレミアムプランで提供予定の機能はナビゲーションせずアラート表示
+function showPremiumLock() {
+  Alert.alert('プレミアム機能', 'この機能は近日、プレミアムプランでご利用いただけるようになります。');
+}
+
 export default function HomeScreen({ navigation }: Props) {
   const { currentPartnerId } = useAppData();
   return (
@@ -64,33 +69,37 @@ export default function HomeScreen({ navigation }: Props) {
 
         {/* サブボタン */}
         <View style={styles.subButtons}>
+          {/* P24: トークルームはプレミアム機能。ロックバッジ＋淡色表示でナビゲーションをブロック */}
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('List')}
+            onPress={showPremiumLock}
           >
             <LinearGradient
               colors={['#B5EAD7', '#C7CEEA']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.subButton}
+              style={[styles.subButton, styles.subButtonLocked]}
             >
               <MessageCircle size={14} color="#333" strokeWidth={2} />
               <Text style={styles.subButtonText}>トークルーム</Text>
+              <Text style={styles.lockBadge}>🔒</Text>
             </LinearGradient>
           </TouchableOpacity>
 
+          {/* P24: 対面モードはプレミアム機能。ロックバッジ＋淡色表示でナビゲーションをブロック */}
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('FaceToFace', { partnerId: currentPartnerId ?? undefined })}
+            onPress={showPremiumLock}
           >
             <LinearGradient
               colors={['#B5EAD7', '#C7CEEA']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.subButton}
+              style={[styles.subButton, styles.subButtonLocked]}
             >
               <Mic size={14} color="#333" strokeWidth={2} />
               <Text style={styles.subButtonText}>対面モード</Text>
+              <Text style={styles.lockBadge}>🔒</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -196,6 +205,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     gap: 4,
+  },
+  subButtonLocked: {
+    opacity: 0.6,
+  },
+  lockBadge: {
+    fontSize: 12,
+    marginLeft: 2,
+    fontFamily: 'Quicksand_400Regular',
   },
   subButtonIcon: {
     fontSize: 14,

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface Explanation {
@@ -127,6 +127,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [currentPartnerId, setCurrentPartnerId] = useState<number | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  // P24: 読込またはJSON.parse失敗時に立てるフラグ。永続化effectがpartners=[]（初期値）で保存済みデータを上書き全消失させるのを防ぐ
+  const loadFailedRef = useRef(false);
   const [translateDraft, setTranslateDraftRaw] = useState<TranslateDraft>({
     partnerInputText: '', selfInputText: '',
     preview: { translation: '', reverseTranslation: '', explanation: null },
@@ -175,7 +177,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         if (partnersRaw) setPartners(JSON.parse(partnersRaw));
         if (tagsRaw) setTags(JSON.parse(tagsRaw));
       } catch {
-        // ignore load errors
+        // P24: 読込/parse失敗。永続化effectをスキップして保存済みデータの上書き消失を防ぐ
+        loadFailedRef.current = true;
       } finally {
         if (mounted) setIsLoaded(true);
       }
@@ -184,12 +187,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || loadFailedRef.current) return;
     AsyncStorage.setItem(STORAGE_KEYS.PARTNERS, JSON.stringify(partners)).catch(() => {});
   }, [partners, isLoaded]);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || loadFailedRef.current) return;
     AsyncStorage.setItem(STORAGE_KEYS.TAGS, JSON.stringify(tags)).catch(() => {});
   }, [tags, isLoaded]);
 

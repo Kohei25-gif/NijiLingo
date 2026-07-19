@@ -40,6 +40,10 @@ export const getOpenAIErrorMessage = (status: number): string => {
 // E10: 絶対URLを使用（React Native では相対URLが使えない）
 const API_BASE_URL = CONFIG.API_BASE_URL;
 
+// プロキシ認証トークン（P24: バンドルから抽出可能なため単体では強い認証ではない。
+// サーバー側のモデル許可リスト+上限クランプ+レート制限との多層防御で乱用コストを抑える）
+const APP_PROXY_TOKEN = '351705f0609e6512eb1001b024b6f1ca4ca0b169e50fa440';
+
 // OpenAI API呼び出し（Vercel Serverless Function経由）
 export async function callGeminiAPI(
   model: string,
@@ -53,6 +57,7 @@ export async function callGeminiAPI(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'x-app-token': APP_PROXY_TOKEN,
     },
     body: JSON.stringify({
       model,
@@ -111,23 +116,34 @@ export async function callSpacyAPI(
   text: string,
   lang: string
 ): Promise<SpacyAnalysis> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000); // 3秒タイムアウト
+  // P24: 3秒→10秒に延長+1回リトライ。Railwayのコールドスタート(1.7〜2.3s)+モバイル回線遅延で
+  // 3秒タイムアウトが頻発し、空構造フォールバック=骨格保護なし翻訳が走っていた
+  const attempt = async (): Promise<SpacyAnalysis> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`${SPACY_API_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, lang }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`spaCy API error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
 
   try {
-    const response = await fetch(`${SPACY_API_URL}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, lang }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`spaCy API error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
-  } finally {
-    clearTimeout(timeout);
+    return await attempt();
+  } catch (error) {
+    console.warn('[callSpacyAPI] 1回目失敗、リトライ:', (error as Error)?.message);
+    return attempt();
   }
 }

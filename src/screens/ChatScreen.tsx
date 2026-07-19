@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -138,6 +139,11 @@ const CUSTOM_PRESETS = [
   { label: 'ギャル', value: 'ギャル' },
 ];
 
+// P24: プレミアム機能ロック。近日プレミアムプランで提供予定の機能はナビゲーションせずアラート表示
+function showPremiumLock() {
+  Alert.alert('プレミアム機能', 'この機能は近日、プレミアムプランでご利用いただけるようになります。');
+}
+
 export default function ChatScreen({ route, navigation }: Props) {
   const { partners, updatePartner, setCurrentPartnerId, chatCaches, setChatCache, clearChatCache } = useAppData();
   const partnersRef = useRef(partners);
@@ -228,6 +234,8 @@ export default function ChatScreen({ route, navigation }: Props) {
   const [translationCacheVersion, setTranslationCacheVersion] = useState(0);
 
   const prevBucketRef = useRef(0);
+  // P24: generateAllToneAdjustmentsの二重実行を防ぐin-flightガード（キー=対象テキスト+言語ペア）
+  const toneGenInFlightRef = useRef<Set<string>>(new Set());
 
   const updateTranslationCache = (updates: Record<string, { translation: string; reverseTranslation: string; noChange?: boolean }>) => {
     setChatCache(partnerId, { translationCache: { ...chatCache.translationCache, ...updates } });
@@ -285,18 +293,26 @@ export default function ChatScreen({ route, navigation }: Props) {
 
     const applyFix = (fixed: { translation: string; reverse_translation: string }) => {
       const cacheKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang, isNativeParam);
-      updateTranslationCache({ [cacheKey]: { translation: fixed.translation, reverseTranslation: fixed.reverse_translation } });
+      // P21/P24: 逆翻訳の不変条件ガード。空、または翻訳文と完全一致（言語スリップ）は無効とみなし、修正前の逆翻訳を保持する
+      const reverseIsValid = fixed.reverse_translation !== '' && fixed.reverse_translation !== fixed.translation;
+      const safeReverse = reverseIsValid
+        ? fixed.reverse_translation
+        : (translationCacheRef.current[cacheKey]?.reverseTranslation || reverseTranslation || sourceText);
+      if (!reverseIsValid) {
+        console.warn(`[applyFix] 逆翻訳が無効（空 or 翻訳文と同一）→ 修正前の逆翻訳を保持: got="${fixed.reverse_translation}"`);
+      }
+      updateTranslationCache({ [cacheKey]: { translation: fixed.translation, reverseTranslation: safeReverse } });
       const currentToneBucket = sliderToToneBucket(sliderValue);
       if (currentToneBucket.tone === tone && currentToneBucket.bucket === bucket) {
-        setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: fixed.reverse_translation }));
+        setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: safeReverse }));
       }
       const otherBucket = bucket === 50 ? 100 : 50;
       const otherKey = getCacheKey(tone, otherBucket, sourceText, undefined, sourceLang, targetLang, isNativeParam);
       const cachedOther = translationCacheRef.current[otherKey];
       if (cachedOther && cachedOther.translation === fixed.translation) {
         const updates: Record<string, { translation: string; reverseTranslation: string; noChange: boolean }> = {};
-        updates[otherKey] = { translation: cachedOther.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
-        updates[cacheKey] = { translation: fixed.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
+        updates[otherKey] = { translation: cachedOther.translation, reverseTranslation: safeReverse, noChange: true };
+        updates[cacheKey] = { translation: fixed.translation, reverseTranslation: safeReverse, noChange: true };
         updateTranslationCache(updates);
       } else if (bucket === 50 && cachedOther) {
         const newNoChange = cachedOther.translation === fixed.translation;
@@ -319,13 +335,17 @@ export default function ChatScreen({ route, navigation }: Props) {
         const naturalIssues = actionableIssues.filter((i: { type: string }) => i.type === 'unnatural' || i.type === 'reverse_subject' || i.type === 'reverse_unnatural');
         setVerificationStatus(prev => ({ ...prev, [bandKey]: 'fixing' }));
         let currentTranslation = translation;
+        let currentReverse = reverseTranslation;
         if (meaningIssues.length > 0) {
           const fixed = await fixMeaningIssues({ originalText, translation: currentTranslation, issues: meaningIssues, sourceLang, targetLang, tone, bucket });
           currentTranslation = fixed.translation;
+          if (fixed.reverse_translation && fixed.reverse_translation !== fixed.translation) {
+            currentReverse = fixed.reverse_translation;
+          }
           applyFix(fixed);
         }
         if (naturalIssues.length > 0) {
-          const fixed = await fixNaturalness({ originalText, translation: currentTranslation, issues: naturalIssues, sourceLang, targetLang, tone, bucket });
+          const fixed = await fixNaturalness({ originalText, translation: currentTranslation, reverseTranslation: currentReverse, issues: naturalIssues, sourceLang, targetLang, tone, bucket });
           applyFix(fixed);
         }
         setVerificationStatus(prev => ({ ...prev, [bandKey]: 'passed' }));
@@ -433,6 +453,12 @@ export default function ChatScreen({ route, navigation }: Props) {
     const { isNative: isNativeParam, sourceText } = params;
     const effectiveTargetLang = params.targetLang;
     const effectiveSourceLang = params.sourceLang;
+
+    // P24: 二重実行ガード（翻訳→即ニュアンス調整で同じ約10連LLMチェーンが二重に走るのを防ぐ）
+    const inFlightKey = `${effectiveSourceLang}->${effectiveTargetLang}|${sourceText}`;
+    if (toneGenInFlightRef.current.has(inFlightKey)) return;
+    toneGenInFlightRef.current.add(inFlightKey);
+    try {
 
     const makeCacheKey = (tone: string, bucket: number) =>
       getCacheKey(tone, bucket, sourceText, undefined, effectiveSourceLang, effectiveTargetLang, isNativeParam);
@@ -558,6 +584,9 @@ export default function ChatScreen({ route, navigation }: Props) {
     if (!noChangeCas100) verifyAndFixOneBand({ bandKey: 'casual_100', tone: 'casual', bucket: 100, originalText: sourceText, translation: casual100Full.translation, reverseTranslation: casual100Full.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus50) verifyAndFixOneBand({ bandKey: 'business_50', tone: 'business', bucket: 50, originalText: sourceText, translation: finalBusiness50.translation, reverseTranslation: finalBusiness50.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
     if (!noChangeBus100) verifyAndFixOneBand({ bandKey: 'business_100', tone: 'business', bucket: 100, originalText: sourceText, translation: finalBusiness100.translation, reverseTranslation: finalBusiness100.reverse_translation, meaningDefinitions: definitions, ...verifyParams });
+    } finally {
+      toneGenInFlightRef.current.delete(inFlightKey);
+    }
   };
 
   const preGenerateToneAdjustments = (params: { isNative: boolean; sourceText: string; targetLang: string; sourceLang: string }) => {
@@ -1080,10 +1109,12 @@ export default function ChatScreen({ route, navigation }: Props) {
           <TouchableOpacity onPress={() => navigation.navigate('Settings', { partnerId: partner.id })} style={styles.settingsBtn}>
             <Settings size={20} color="#333" strokeWidth={2} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('FaceToFace', { partnerId: partner.id })} style={styles.faceToFaceBtn}>
+          {/* P24: 対面モードはプレミアム機能。ナビゲーションをブロックしアラート表示 */}
+          <TouchableOpacity onPress={showPremiumLock} style={[styles.faceToFaceBtn, { opacity: 0.6 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Text style={styles.faceToFaceText}>対面</Text>
               <Mic size={14} color="#0369A1" strokeWidth={2} />
+              <Text style={styles.faceToFaceText}>🔒</Text>
             </View>
           </TouchableOpacity>
         </View>
