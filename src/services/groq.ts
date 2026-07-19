@@ -371,14 +371,28 @@ export async function translateFullSimple(options: {
   console.log('[translateFullSimple] ===== API CALL =====');
   console.log('[translateFullSimple] prompt:', systemPrompt);
 
-  const response = await callGeminiAPI(MODELS.FULL, systemPrompt, sourceText, 0.3, signal);
-  console.log('[translateFullSimple] response:', response);
+  // P23: 言語アンカーをuserPrompt先頭に配置（P7方式）。
+  // systemPromptの1行指定だけでは【逆翻訳】ブロックに負けて、翻訳が原文言語のまま返ることがある
+  const fullTargetLangEnglish = getLangNameFromCode(getLangCodeFromName(targetLang));
+  const fullSourceLangEnglish = getLangNameFromCode(getLangCodeFromName(sourceLang));
+  const userPromptText = `Translation language: ${fullTargetLangEnglish}\nReverse translation language: ${fullSourceLangEnglish}\n\n${sourceText}`;
 
-  const parsed = parseJsonResponse<TranslationResult>(response);
-  const result = applyTranslationLanguageGuard(
-    targetLang,
-    applyReverseTranslationGuard(sourceLang, applyEvaluationWordGuard(sourceText, parsed))
-  );
+  const generate = async (): Promise<TranslationResult> => {
+    const response = await callGeminiAPI(MODELS.FULL, systemPrompt, userPromptText, 0.3, signal);
+    console.log('[translateFullSimple] response:', response);
+    const parsed = parseJsonResponse<TranslationResult>(response);
+    return applyTranslationLanguageGuard(
+      targetLang,
+      applyReverseTranslationGuard(sourceLang, applyEvaluationWordGuard(sourceText, parsed))
+    );
+  };
+
+  let result = await generate();
+  // P23: かな混入（出力が原文言語のまま返る揺らぎ）は1回だけ再生成する
+  if (targetLang !== '日本語' && /[ぁ-んァ-ン]/.test(result.translation)) {
+    console.warn('[translateFullSimple] 言語混入検出 → 再生成:', result.translation);
+    result = await generate();
+  }
   console.log('[translateFullSimple] result:', result);
 
   return result;
@@ -444,7 +458,7 @@ export async function translatePartialSpacy(options: {
     '- 内容・出来事はそのまま保つこと',
     '- Do not change the subject of the sentence (e.g. "I" must stay "I", not "we")',
     '- 原文がカジュアルな語を使っている場合、語彙の格を上げるな。ビジネストーンは丁寧表現や文の構造で表現せよ',
-    '- カジュアルトーンでは、格式張った語や敬称的な表現をその言語の日常会話の言い方に置き換えよ',
+    '- カジュアルトーンでは、格式張った語や敬称的な表現を出力言語（Output language）の日常会話の言い方に置き換えよ',
   ].join('\n');
 
   // 出力言語を英語名で明示 — U4(言語混在)修正
@@ -500,6 +514,14 @@ export async function translatePartialSpacy(options: {
       reverse_translation: parsed.reverse_translation || originalText,
       risk: 'low',
     });
+    // P23: かな混入検出時はストリップ結果を信用せず、前段レベルまたはベース翻訳に退避する
+    if (guarded.risk === 'high') {
+      console.warn(`[translatePartialSpacy] 言語混入検出 → フォールバック (${tone}/${toneLevel})`);
+      if (fallbackToPreviousLevel) {
+        return fallbackToPreviousLevel;
+      }
+      return { translation: baseTranslation, reverse_translation: originalText, risk: 'high' };
+    }
     const partialResult = {
       translation: guarded.translation,
       reverse_translation: guarded.reverse_translation,

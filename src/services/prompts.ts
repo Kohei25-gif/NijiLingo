@@ -2,6 +2,7 @@
 // spaCyベース3分類（固定語/内容語/機能語）
 
 import type { TranslateOptions, SpacyAnalysis } from './types';
+import { getLangCodeFromName, getLangNameFromCode } from './i18n';
 
 // ニュアンス調整の境界定義（構造フィールドとの重複なし。トーンが何を変えていいかだけ定義）
 export const TONE_BOUNDARY_RULES = `
@@ -334,8 +335,11 @@ export function getSimpleFullGenPrompt(targetLang: string, sourceLang: string, c
   const politenessLine = options?.hasToneInstruction
     ? ''
     : '\nPreserve the original text\'s level of politeness: if the original is polite, keep the translation polite; if casual, keep it casual.';
-  return `Translate to ${targetLang} naturally.${politenessLine}${constraint}
-Output JSON only: {"translation":"...","reverse_translation":"...in ${sourceLang}...","risk":"low|med|high","detected_language":"..."}`;
+  // P23: 言語指定は英語名アンカー（P7方式）。日本語名のままだとqwenがja→zhで日本語のまま返す
+  const targetLangEnglish = getLangNameFromCode(getLangCodeFromName(targetLang));
+  const sourceLangEnglish = getLangNameFromCode(getLangCodeFromName(sourceLang));
+  return `Translate to ${targetLangEnglish} naturally.${politenessLine}${constraint}
+Output JSON only: {"translation":"...in ${targetLangEnglish}...","reverse_translation":"...in ${sourceLangEnglish}...","risk":"low|med|high","detected_language":"..."}`;
 }
 
 // フル生成用: 原文spaCy結果からcontent wordsリストを生成

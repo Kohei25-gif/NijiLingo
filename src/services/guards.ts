@@ -377,9 +377,9 @@ export function applyTranslationLanguageGuard(
   targetLang: string,
   result: TranslationResult
 ): TranslationResult {
-  // ターゲットが日本語・中国語の場合はチェック不要
-  // （中国語は漢字をCJK共通で使うため、日本語と区別できない）
-  if (targetLang === '日本語' || targetLang === '中国語') {
+  // ターゲットが日本語の場合はチェック不要
+  // 中国語は除外しない: 判定はかなベースであり、かなは正規の中国語に現れないため有効（P23）
+  if (targetLang === '日本語') {
     return result;
   }
   // translationに日本語が混入していたらrisk=highにする
@@ -387,6 +387,10 @@ export function applyTranslationLanguageGuard(
   const hasJapanese = /[ぁ-んァ-ン]/.test(result.translation);
   if (hasJapanese) {
     console.warn('[applyTranslationLanguageGuard] Japanese detected in translation:', result.translation);
+    // 中国語はかなを除去すると漢字残骸が壊れた文になるため、ストリップせず検出のみ（呼び出し側が再生成/退避する）
+    if (targetLang === '中国語') {
+      return { ...result, risk: 'high' };
+    }
     // 日本語部分を除去して返す（ひらがな・カタカナのみ除去、漢字は残す）
     const cleanedTranslation = result.translation.replace(/[ぁ-んァ-ン]+/g, '').trim();
     return {
