@@ -676,6 +676,10 @@ export async function fixMeaningIssues(options: {
 
   const reverseInstr = getReverseTranslationInstruction(sourceLang, targetLang, 0, tone);
 
+  // P21: 出力言語を英語名でアンカー（P7と同じ方式）。日本語の言語名だけだとqwenがja→zhで逆翻訳を中国語にスリップする
+  const targetLangEnglish = getLangNameFromCode(getLangCodeFromName(targetLang));
+  const sourceLangEnglish = getLangNameFromCode(getLangCodeFromName(sourceLang));
+
   const issuesList = JSON.stringify(issues, null, 2);
 
   // トーン定義を翻訳時と同じgetToneInstructionから取得
@@ -688,12 +692,12 @@ export async function fixMeaningIssues(options: {
   const systemPrompt = `You are a translation fixer.
 Fix based on the issues provided. The expected field shows the correct meaning for each word.
 Keep everything else, including the tone level, exactly the same.${toneBlock}
-The translation MUST be in ${targetLang}. Do NOT output in the original language.
+The translation MUST be in ${targetLangEnglish}. The reverse_translation MUST be in ${sourceLangEnglish}.
 ${reverseInstr}
 Respond in JSON:
 {
-  "translation": "...in ${targetLang}...",
-  "reverse_translation": "...in ${sourceLang}..."
+  "translation": "...in ${targetLangEnglish}...",
+  "reverse_translation": "...in ${sourceLangEnglish}..."
 }`;
 
   const userPrompt = `Original text (${sourceLang}):
@@ -723,11 +727,12 @@ ${issuesList}`;
 
 /**
  * 不自然な表現を修正する（70Bモデル使用）
- * unnatural 用。文全体を返させる（文法連鎖があるため）
+ * unnatural / reverse_subject / reverse_unnatural 用。文全体を返させる（文法連鎖があるため）
  */
 export async function fixNaturalness(options: {
   originalText: string;
   translation: string;
+  reverseTranslation?: string;
   issues: VerificationIssue[];
   sourceLang: string;
   targetLang: string;
@@ -735,12 +740,21 @@ export async function fixNaturalness(options: {
   bucket?: number;
   signal?: AbortSignal;
 }): Promise<{ translation: string; reverse_translation: string }> {
-  const { originalText, translation, issues, sourceLang, targetLang, tone, bucket, signal } = options;
+  const { originalText, translation, reverseTranslation, issues, sourceLang, targetLang, tone, bucket, signal } = options;
 
   const reverseInstr = getReverseTranslationInstruction(sourceLang, targetLang, 0, tone);
 
+  // P21: 出力言語を英語名でアンカー（P7と同じ方式）
+  const targetLangEnglish = getLangNameFromCode(getLangCodeFromName(targetLang));
+  const sourceLangEnglish = getLangNameFromCode(getLangCodeFromName(sourceLang));
+
+  // P21: issueが翻訳文と逆翻訳のどちらを指すかをラベルで位置指定する。
+  // 逆翻訳のissueを翻訳文の枠組みで渡すと、モデルは直す対象を持てず翻訳文をreverse欄にコピーする
   const issuesList = issues
-    .map(i => `- "${i.phrase}" is ${i.reason}`)
+    .map(i => {
+      const target = i.type === 'reverse_subject' || i.type === 'reverse_unnatural' ? 'reverse_translation' : 'translation';
+      return `- [${target}] "${i.phrase}" is ${i.reason}`;
+    })
     .join('\n');
 
   // トーン定義を翻訳時と同じgetToneInstructionから取得
@@ -751,20 +765,21 @@ export async function fixNaturalness(options: {
   const toneBlock = toneDefinition ? `\n${toneDefinition}` : '';
 
   const systemPrompt = `You are a translation fixer.
-The translation has unnatural expressions. Rewrite the sentence fixing ONLY the unnatural parts.
-Do not change anything else. Keep the meaning and tone level exactly the same.${toneBlock}
-The translation MUST be in ${targetLang}. Do NOT output in the original language.
+Some parts of the translation or its reverse translation are unnatural. Fix ONLY the parts flagged in Issues.
+Keep the meaning and tone level exactly the same.${toneBlock}
+The translation MUST be in ${targetLangEnglish}. The reverse_translation MUST be in ${sourceLangEnglish}.
 ${reverseInstr}
 Respond in JSON:
 {
-  "translation": "...in ${targetLang}...",
-  "reverse_translation": "...in ${sourceLang}..."
+  "translation": "...in ${targetLangEnglish}...",
+  "reverse_translation": "...in ${sourceLangEnglish}..."
 }`;
 
+  const reverseLine = reverseTranslation ? `\nReverse translation (${sourceLang}):\n"${reverseTranslation}"` : '';
   const userPrompt = `Original text (${sourceLang}):
 "${originalText}"
-Translation with unnatural expressions (${targetLang}):
-"${translation}"
+Translation (${targetLang}):
+"${translation}"${reverseLine}
 Issues:
 ${issuesList}`;
 

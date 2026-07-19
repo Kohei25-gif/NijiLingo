@@ -438,12 +438,20 @@ export default function TranslateScreen({ route, navigation }: Props) {
 
     const applyFix = (fixed: { translation: string; reverse_translation: string }) => {
       const cacheKey = getCacheKey(tone, bucket, sourceText, undefined, sourceLang, targetLang);
+      // P21: 逆翻訳の不変条件ガード。空、または翻訳文と完全一致（言語スリップ）は無効とみなし、修正前の逆翻訳を保持する
+      const reverseIsValid = fixed.reverse_translation !== '' && fixed.reverse_translation !== fixed.translation;
+      const safeReverse = reverseIsValid
+        ? fixed.reverse_translation
+        : (translationCacheRef.current[cacheKey]?.reverseTranslation || reverseTranslation || sourceText);
+      if (!reverseIsValid) {
+        console.warn(`[applyFix] 逆翻訳が無効（空 or 翻訳文と同一）→ 修正前の逆翻訳を保持: got="${fixed.reverse_translation}"`);
+      }
       updateTranslationCache({
-        [cacheKey]: { translation: fixed.translation, reverseTranslation: fixed.reverse_translation }
+        [cacheKey]: { translation: fixed.translation, reverseTranslation: safeReverse }
       });
       const currentToneBucket = sliderToToneBucket(sliderValue);
       if (currentToneBucket.tone === tone && currentToneBucket.bucket === bucket) {
-        setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: fixed.reverse_translation }));
+        setPreview(prev => ({ ...prev, translation: fixed.translation, reverseTranslation: safeReverse }));
       }
       // noChange整合性維持
       const otherBucket = bucket === 50 ? 100 : 50;
@@ -451,8 +459,8 @@ export default function TranslateScreen({ route, navigation }: Props) {
       const cachedOther = translationCacheRef.current[otherKey];
       if (cachedOther && cachedOther.translation === fixed.translation) {
         const updates: Record<string, { translation: string; reverseTranslation: string; noChange: boolean }> = {};
-        updates[otherKey] = { translation: cachedOther.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
-        updates[cacheKey] = { translation: fixed.translation, reverseTranslation: fixed.reverse_translation, noChange: true };
+        updates[otherKey] = { translation: cachedOther.translation, reverseTranslation: safeReverse, noChange: true };
+        updates[cacheKey] = { translation: fixed.translation, reverseTranslation: safeReverse, noChange: true };
         updateTranslationCache(updates);
       } else if (bucket === 50 && cachedOther) {
         // 50%が変わったので100%のnoChangeを再判定
@@ -478,13 +486,17 @@ export default function TranslateScreen({ route, navigation }: Props) {
         const naturalIssues = actionableIssues.filter((i: { type: string }) => i.type === 'unnatural' || i.type === 'reverse_subject' || i.type === 'reverse_unnatural');
         setVerificationStatus(prev => ({ ...prev, [bandKey]: 'fixing' }));
         let currentTranslation = translation;
+        let currentReverse = reverseTranslation;
         if (meaningIssues.length > 0) {
           const fixed = await fixMeaningIssues({ originalText, translation: currentTranslation, issues: meaningIssues, sourceLang, targetLang, tone, bucket });
           currentTranslation = fixed.translation;
+          if (fixed.reverse_translation && fixed.reverse_translation !== fixed.translation) {
+            currentReverse = fixed.reverse_translation;
+          }
           applyFix(fixed);
         }
         if (naturalIssues.length > 0) {
-          const fixed = await fixNaturalness({ originalText, translation: currentTranslation, issues: naturalIssues, sourceLang, targetLang, tone, bucket });
+          const fixed = await fixNaturalness({ originalText, translation: currentTranslation, reverseTranslation: currentReverse, issues: naturalIssues, sourceLang, targetLang, tone, bucket });
           applyFix(fixed);
         }
         setVerificationStatus(prev => ({ ...prev, [bandKey]: 'passed' }));
