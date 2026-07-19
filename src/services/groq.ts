@@ -440,10 +440,11 @@ export async function translatePartialSpacy(options: {
     '【ルール】',
     '- 【絶対変えるな】の語はそのまま保つこと',
     '- 【言い換えOK】の各語は、横に書かれた説明に合う言葉を選ぶこと',
-    '- 【自由に変えていい】の語は自由に調整してよい',
+    '- 【自由に変えていい】の語はトーンに合わせて調整すること',
     '- 内容・出来事はそのまま保つこと',
     '- Do not change the subject of the sentence (e.g. "I" must stay "I", not "we")',
     '- 原文がカジュアルな語を使っている場合、語彙の格を上げるな。ビジネストーンは丁寧表現や文の構造で表現せよ',
+    '- カジュアルトーンでは、格式張った語や敬称的な表現をその言語の日常会話の言い方に置き換えよ',
   ].join('\n');
 
   // 出力言語を英語名で明示 — U4(言語混在)修正
@@ -451,8 +452,12 @@ export async function translatePartialSpacy(options: {
 
   // 100%生成時は「ベースを書き直せ」ではなく「50%版を推敲しろ」に変える
   // 語彙エスカレーション（go→proceed等）を防ぎ、文体推敲に誘導する
+  // P22: 推敲の方向をトーンに合わせる（旧: 全トーンで「Add polite expressions」固定 → casual 100%が丁寧化する逆転が起きていた）
+  const refineInstruction = tone === 'casual'
+    ? 'Adjust the 50% version to match this tone. Keep the same vocabulary. Make the phrasing more casual and relaxed, do not upgrade word choices.'
+    : 'Adjust the 50% version to match this tone. Keep the same vocabulary. Add polite expressions to increase formality, do not upgrade word choices.';
   const toneInstructionAdjusted = referenceTranslation
-    ? toneInstruction.replace('Apply these to the base translation.', 'Adjust the 50% version to match this tone. Keep the same vocabulary. Add polite expressions to increase formality, do not upgrade word choices.')
+    ? toneInstruction.replace('Apply these to the base translation.', refineInstruction)
     : toneInstruction;
 
   // meaning定義テキスト（ルールブロック後、トーン指示前に配置）

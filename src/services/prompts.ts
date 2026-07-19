@@ -38,8 +38,9 @@ export function getToneInstruction(options: TranslateOptions): string {
   // casual 100%はP8で実績あり（→連鎖暴走を解決）。他も同じ方法論に統一。
   const toneTable: Record<string, Record<string, string>> = {
     casual: {
-      '50': 'Rewrite as if writing a casual email to a friend.',
-      '100': 'Translate naturally using native expressions and slang where appropriate.',
+      // P22: qwen3.6はこの帯でNo changeが常態化していたため、カジュアル度が明示的な場面に変更
+      '50': 'Rewrite as if chatting with a friend.',
+      '100': 'Rewrite as if texting a close friend.',
     },
     business: {
       '50': 'Write in a polite and respectful tone. Use courteous expressions appropriate for the target language. Do not replace everyday vocabulary with literary or archaic words.',
