@@ -15,6 +15,7 @@ import {
 import Slider from '@react-native-community/slider';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Mic, Copy, Check } from 'lucide-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -991,6 +992,8 @@ export default function ChatScreen({ route, navigation }: Props) {
   };
 
   const handleLockToggle = () => {
+    // P25: タップへの応答を明確にするためハプティクスを追加（審査2.1: 無反応ボタン対策）
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (lockedSliderPosition !== null) {
       setLockedSliderPosition(null);
       AsyncStorage.removeItem('nijilingo_locked_slider_position').catch(() => {});
@@ -1315,7 +1318,7 @@ export default function ChatScreen({ route, navigation }: Props) {
                 <Text style={styles.customBtnText}>カスタム</Text>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.lockBtn, lockedSliderPosition !== null && styles.lockBtnActive]} onPress={handleLockToggle} disabled={!toneAdjusted && lockedSliderPosition === null}>
+            <TouchableOpacity style={[styles.lockBtn, lockedSliderPosition !== null && styles.lockBtnActive]} onPress={handleLockToggle}>
               <Text style={styles.lockBtnText}>{lockedSliderPosition !== null ? '🔒' : '🔓'}</Text>
             </TouchableOpacity>
           </View>

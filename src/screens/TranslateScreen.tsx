@@ -1298,6 +1298,8 @@ export default function TranslateScreen({ route, navigation }: Props) {
   // ══════════════════════════════════════════════
 
   const handleLockToggle = () => {
+    // P25: タップへの応答を明確にするためハプティクスを追加（審査2.1: 無反応ボタン対策）
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (lockedSliderPosition !== null) {
       setLockedSliderPosition(null);
       AsyncStorage.removeItem('nijilingo_locked_slider_position').catch(() => {});
@@ -1902,10 +1904,11 @@ export default function TranslateScreen({ route, navigation }: Props) {
               </LinearGradient>
             </TouchableOpacity>
 
+            {/* P25: disabledを撤廃し常にタップ可能に（翻訳前でもスライダー位置の固定は有効な操作。
+                無効なのに通常の見た目のボタンが審査2.1で「無反応」と判定された） */}
             <TouchableOpacity
               style={[styles.lockBtn, lockedSliderPosition !== null && styles.lockBtnActive]}
               onPress={handleLockToggle}
-              disabled={!toneAdjusted && lockedSliderPosition === null}
             >
               <Text style={styles.lockBtnText}>
                 {lockedSliderPosition !== null ? '🔒' : '🔓'}
